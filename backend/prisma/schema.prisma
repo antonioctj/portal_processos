@@ -1,0 +1,735 @@
+// ProcessAI — Schema do banco de dados
+// Ver seção 23 do documento de especificação para a lista de entidades exigidas.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Identidade / Multi-tenant
+// ─────────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  ANALYST
+  VIEWER
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users         User[]
+  projects      Project[]
+  processes     Process[]
+  documents     Document[]
+  aiProviders   AIProvider[]
+  aiUsage       AIUsage[]
+  auditLogs     AuditLog[]
+  gaps          Gap[]
+  opportunities Opportunity[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  email          String   @unique
+  passwordHash   String
+  role           UserRole @default(ANALYST)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  ownedProcesses    Process[]        @relation("ProcessOwner")
+  createdProcesses  Process[]        @relation("ProcessCreatedBy")
+  documents         Document[]
+  conversations     Conversation[]
+  messages          Message[]
+  auditLogs         AuditLog[]
+  processVersions   ProcessVersion[]
+  gapsAssigned      Gap[]            @relation("GapResponsible")
+  actionsAssigned   Action[]         @relation("ActionResponsible")
+
+  @@index([organizationId])
+  @@map("users")
+}
+
+model Project {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  processes    Process[]
+
+  @@index([organizationId])
+  @@map("projects")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Processos
+// ─────────────────────────────────────────────────────────────────────────
+
+enum ProcessStatus {
+  DRAFT
+  IN_ANALYSIS
+  IN_REVIEW
+  APPROVED
+  PUBLISHED
+  ARCHIVED
+}
+
+model Process {
+  id             String        @id @default(uuid())
+  organizationId String
+  projectId      String?
+  parentId       String?
+  code           String?
+  name           String
+  description    String?
+  area           String?
+  ownerId        String?
+  department     String?
+  objective      String?
+  scope          String?
+  category       String?
+  status         ProcessStatus @default(DRAFT)
+  currentVersion String        @default("0.1")
+  healthScore    Int?
+  createdById    String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?      @relation(fields: [projectId], references: [id])
+  parent       Process?      @relation("ProcessParent", fields: [parentId], references: [id])
+  children     Process[]     @relation("ProcessParent")
+  owner        User?         @relation("ProcessOwner", fields: [ownerId], references: [id])
+  createdBy    User          @relation("ProcessCreatedBy", fields: [createdById], references: [id])
+
+  versions        ProcessVersion[]
+  documents       DocumentProcessLink[]
+  analysisResults AnalysisResult[]
+  gaps            Gap[]
+  opportunities   Opportunity[]
+  conversations   Conversation[]
+  actions         Action[]
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@map("processes")
+}
+
+enum ProcessVersionType {
+  AS_IS
+  TO_BE
+}
+
+model ProcessVersion {
+  id          String             @id @default(uuid())
+  processId   String
+  version     String
+  type        ProcessVersionType @default(AS_IS)
+  label       String?
+  changelog   String?
+  isCurrent   Boolean            @default(false)
+  createdById String
+  createdAt   DateTime           @default(now())
+
+  process   Process @relation(fields: [processId], references: [id], onDelete: Cascade)
+  createdBy User    @relation(fields: [createdById], references: [id])
+
+  elements    ProcessElement[]
+  connections ProcessConnection[]
+  bpmnVersion BpmnVersion?
+
+  @@unique([processId, version])
+  @@index([processId])
+  @@map("process_versions")
+}
+
+enum ElementType {
+  START_EVENT
+  END_EVENT
+  INTERMEDIATE_EVENT
+  TASK
+  USER_TASK
+  SERVICE_TASK
+  MANUAL_TASK
+  SUBPROCESS
+  EXCLUSIVE_GATEWAY
+  PARALLEL_GATEWAY
+  INCLUSIVE_GATEWAY
+  POOL
+  LANE
+  DATA_OBJECT
+}
+
+enum ConfidenceLevel {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum SourceType {
+  DOCUMENT
+  CHAT
+  AI_SUGGESTION
+  MANUAL
+}
+
+model ProcessElement {
+  id               String          @id @default(uuid())
+  processVersionId String
+  bpmnElementId    String
+  type             ElementType
+  name             String
+  description      String?
+  responsible      String?
+  area             String?
+  system           String?
+  input            String?
+  output           String?
+  sla              String?
+  rule             String?
+  isAutomatic      Boolean?
+  estimatedTime    String?
+  frequency        String?
+  notes            String?
+  positionX        Float?
+  positionY        Float?
+  width            Float?
+  height           Float?
+  laneId           String?
+
+  confidence ConfidenceLevel @default(MEDIUM)
+  sourceType SourceType      @default(MANUAL)
+  sourceRef  String? // trecho / referência (ex: "Documento X, pág 14") ou "Conversa com usuário"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  processVersion ProcessVersion @relation(fields: [processVersionId], references: [id], onDelete: Cascade)
+
+  outgoing ProcessConnection[] @relation("ConnectionSource")
+  incoming ProcessConnection[] @relation("ConnectionTarget")
+  gaps          Gap[]
+  opportunities Opportunity[]
+
+  @@unique([processVersionId, bpmnElementId])
+  @@index([processVersionId])
+  @@map("process_elements")
+}
+
+model ProcessConnection {
+  id               String  @id @default(uuid())
+  processVersionId String
+  bpmnFlowId       String
+  sourceId         String
+  targetId         String
+  label            String?
+  condition        String?
+
+  confidence ConfidenceLevel @default(MEDIUM)
+  sourceType SourceType      @default(MANUAL)
+  sourceRef  String?
+
+  createdAt DateTime @default(now())
+
+  processVersion ProcessVersion @relation(fields: [processVersionId], references: [id], onDelete: Cascade)
+  source         ProcessElement @relation("ConnectionSource", fields: [sourceId], references: [id], onDelete: Cascade)
+  target         ProcessElement @relation("ConnectionTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([processVersionId, bpmnFlowId])
+  @@index([processVersionId])
+  @@map("process_connections")
+}
+
+model BpmnVersion {
+  id               String   @id @default(uuid())
+  processVersionId String   @unique
+  xml              String   @db.Text
+  svg              String?  @db.Text
+  healthScore      Int?
+  healthBreakdown  Json?
+  generatedBy      SourceType @default(MANUAL)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  processVersion ProcessVersion @relation(fields: [processVersionId], references: [id], onDelete: Cascade)
+
+  @@map("bpmn_versions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Documentos
+// ─────────────────────────────────────────────────────────────────────────
+
+enum DocumentType {
+  PDF
+  DOCX
+  XLSX
+  CSV
+  TXT
+  IMAGE
+  OTHER
+}
+
+enum DocumentStatus {
+  UPLOADED
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+model Document {
+  id             String         @id @default(uuid())
+  organizationId String
+  uploadedById   String
+  name           String
+  type           DocumentType
+  mimeType       String
+  sizeBytes      Int
+  storageKey     String
+  hash           String
+  status         DocumentStatus @default(UPLOADED)
+  errorMessage   String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploadedBy   User         @relation(fields: [uploadedById], references: [id])
+
+  chunks          DocumentChunk[]
+  processes       DocumentProcessLink[]
+  analysisResults AnalysisResult[]
+
+  @@index([organizationId])
+  @@map("documents")
+}
+
+model DocumentProcessLink {
+  id         String   @id @default(uuid())
+  documentId String
+  processId  String
+  createdAt  DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  process  Process  @relation(fields: [processId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, processId])
+  @@map("document_process_links")
+}
+
+model DocumentChunk {
+  id         String  @id @default(uuid())
+  documentId String
+  page       Int?
+  order      Int
+  content    String  @db.Text
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@map("document_chunks")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Análise de IA
+// ─────────────────────────────────────────────────────────────────────────
+
+enum AnalysisStep {
+  EXTRACTING_CONTENT
+  IDENTIFYING_CONTEXT
+  IDENTIFYING_PROCESS
+  IDENTIFYING_ACTIVITIES
+  IDENTIFYING_RESPONSIBLES
+  IDENTIFYING_INPUTS
+  IDENTIFYING_OUTPUTS
+  IDENTIFYING_DECISIONS
+  IDENTIFYING_RULES
+  IDENTIFYING_EXCEPTIONS
+  IDENTIFYING_SYSTEMS
+  IDENTIFYING_GAPS
+  IDENTIFYING_OPPORTUNITIES
+}
+
+enum AnalysisStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model AnalysisResult {
+  id          String         @id @default(uuid())
+  processId   String
+  documentId  String?
+  status      AnalysisStatus @default(PENDING)
+  currentStep AnalysisStep?
+  stepsLog    Json? // histórico de progresso [{step, status, startedAt, finishedAt}]
+  structured  Json? // saída estruturada completa (overview, inputs, activities, outputs, decisions, exceptions)
+  errorMessage String?
+  startedAt   DateTime       @default(now())
+  finishedAt  DateTime?
+
+  process  Process   @relation(fields: [processId], references: [id], onDelete: Cascade)
+  document Document? @relation(fields: [documentId], references: [id])
+
+  @@index([processId])
+  @@map("analysis_results")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Gaps
+// ─────────────────────────────────────────────────────────────────────────
+
+enum GapCategory {
+  MISSING_RESPONSIBLE
+  MISSING_INPUT
+  MISSING_OUTPUT
+  MISSING_RULE
+  DUPLICATED_ACTIVITY
+  REDUNDANT_ACTIVITY
+  INCONSISTENT_INFO
+  MISSING_SYSTEM
+  MANUAL_STEP
+  MISSING_SLA
+  MISSING_ENTRY_CRITERIA
+  MISSING_EXIT_CRITERIA
+  MISSING_DOCUMENTATION
+  MISSING_EXCEPTION_HANDLING
+  MISSING_CONTROL
+  REWORK
+  WAIT_POINT
+  EXCESSIVE_APPROVAL
+  UNNECESSARY_HANDOFF
+  MANUAL_CONTROL
+  OPERATIONAL_RISK
+  OTHER
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum GapStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  ACCEPTED_RISK
+  WONT_FIX
+}
+
+model Gap {
+  id              String      @id @default(uuid())
+  organizationId  String
+  processId       String
+  elementId       String?
+  category        GapCategory
+  description     String
+  evidence        String?
+  impact          String?
+  severity        Severity    @default(MEDIUM)
+  recommendation  String?
+  status          GapStatus   @default(OPEN)
+  responsibleId   String?
+  dueDate         DateTime?
+  confidence      ConfidenceLevel @default(MEDIUM)
+  sourceType      SourceType      @default(AI_SUGGESTION)
+  sourceRef       String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  process      Process         @relation(fields: [processId], references: [id], onDelete: Cascade)
+  element      ProcessElement? @relation(fields: [elementId], references: [id])
+  responsible  User?           @relation("GapResponsible", fields: [responsibleId], references: [id])
+  actions      Action[]
+
+  @@index([processId])
+  @@index([organizationId])
+  @@map("gaps")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Oportunidades
+// ─────────────────────────────────────────────────────────────────────────
+
+enum OpportunityType {
+  AUTOMATION
+  RPA
+  SYSTEM_INTEGRATION
+  STEP_ELIMINATION
+  REWORK_REDUCTION
+  APPROVAL_REDUCTION
+  PARALLELIZATION
+  DIGITALIZATION
+  TIME_REDUCTION
+  HANDOFF_REDUCTION
+  CONTROL_IMPROVEMENT
+  CX_IMPROVEMENT
+  OPERATIONAL_IMPROVEMENT
+  OTHER
+}
+
+enum Complexity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum OpportunityStatus {
+  IDENTIFIED
+  UNDER_EVALUATION
+  APPROVED
+  IN_PROGRESS
+  IMPLEMENTED
+  REJECTED
+}
+
+model Opportunity {
+  id             String            @id @default(uuid())
+  organizationId String
+  processId      String
+  elementId      String?
+  title          String
+  description    String?
+  currentProblem String?
+  benefit        String?
+  complexity     Complexity        @default(MEDIUM)
+  dependencies   String?
+  systemsInvolved String?
+  solutionType   OpportunityType
+  evidence       String?
+  status         OpportunityStatus @default(IDENTIFIED)
+  confidence     ConfidenceLevel   @default(MEDIUM)
+  sourceType     SourceType        @default(AI_SUGGESTION)
+  sourceRef      String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  process      Process         @relation(fields: [processId], references: [id], onDelete: Cascade)
+  element      ProcessElement? @relation(fields: [elementId], references: [id])
+  actions      Action[]
+
+  @@index([processId])
+  @@index([organizationId])
+  @@map("opportunities")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Plano de ação
+// ─────────────────────────────────────────────────────────────────────────
+
+enum ActionStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  CANCELED
+}
+
+model Action {
+  id            String       @id @default(uuid())
+  processId     String
+  gapId         String?
+  opportunityId String?
+  title         String
+  description   String?
+  responsibleId String?
+  dueDate       DateTime?
+  status        ActionStatus @default(PENDING)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  process     Process      @relation(fields: [processId], references: [id], onDelete: Cascade)
+  gap         Gap?         @relation(fields: [gapId], references: [id])
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id])
+  responsible User?        @relation("ActionResponsible", fields: [responsibleId], references: [id])
+
+  @@index([processId])
+  @@map("actions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// IA — provedores, modelos, uso
+// ─────────────────────────────────────────────────────────────────────────
+
+enum AIProviderType {
+  OPENAI
+  ANTHROPIC
+  GOOGLE
+  AZURE_OPENAI
+  LOCAL
+  OTHER
+}
+
+model AIProvider {
+  id                String         @id @default(uuid())
+  organizationId    String
+  type              AIProviderType
+  label             String
+  apiKeyEncrypted   String? @db.Text
+  apiKeyLast4       String?
+  endpoint          String?
+  temperature       Float          @default(0.2)
+  maxTokens         Int            @default(4096)
+  analysisModel     String?
+  generationModel   String?
+  isActive          Boolean        @default(true)
+  isDefault         Boolean        @default(false)
+  lastTestedAt      DateTime?
+  lastTestOk        Boolean?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  models       AIModel[]
+  usage        AIUsage[]
+
+  @@index([organizationId])
+  @@map("ai_providers")
+}
+
+model AIModel {
+  id          String   @id @default(uuid())
+  providerId  String
+  modelId     String
+  label       String?
+  purpose     String? // "analysis" | "generation" | "chat"
+  inputPrice  Float? // custo por 1K tokens de entrada (USD)
+  outputPrice Float? // custo por 1K tokens de saída (USD)
+  createdAt   DateTime @default(now())
+
+  provider AIProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId])
+  @@map("ai_models")
+}
+
+model AIUsage {
+  id             String   @id @default(uuid())
+  organizationId String
+  providerId     String?
+  userId         String?
+  processId      String?
+  purpose        String // "document_analysis" | "gap_detection" | "chat" | "bpmn_generation" ...
+  model          String?
+  inputTokens    Int      @default(0)
+  outputTokens   Int      @default(0)
+  costEstimate   Float    @default(0)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  provider     AIProvider?  @relation(fields: [providerId], references: [id])
+
+  @@index([organizationId])
+  @@index([processId])
+  @@map("ai_usage")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Chat / Assistente IA
+// ─────────────────────────────────────────────────────────────────────────
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+model Conversation {
+  id        String   @id @default(uuid())
+  processId String
+  userId    String
+  title     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  process  Process   @relation(fields: [processId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id])
+  messages Message[]
+
+  @@index([processId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String      @id @default(uuid())
+  conversationId String
+  userId         String?
+  role           MessageRole
+  content        String      @db.Text
+  actions        Json? // alterações aplicadas ao processo/BPMN a partir desta mensagem
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id])
+
+  @@index([conversationId])
+  @@map("messages")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Auditoria
+// ─────────────────────────────────────────────────────────────────────────
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  ANALYZE
+  GENERATE_BPMN
+  REFINE_BPMN
+  LOGIN
+  EXPORT
+  TEST_CONNECTION
+  OTHER
+}
+
+model AuditLog {
+  id             String      @id @default(uuid())
+  organizationId String
+  userId         String?
+  action         AuditAction
+  entity         String
+  entityId       String?
+  processId      String?
+  version        String?
+  changes        Json?
+  aiProvider     String?
+  aiModel        String?
+  tokensUsed     Int?
+  costEstimate   Float?
+  documentId     String?
+  ip             String?
+  createdAt      DateTime    @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id])
+
+  @@index([organizationId])
+  @@index([processId])
+  @@map("audit_logs")
+}
