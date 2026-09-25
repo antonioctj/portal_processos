@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
+import path from "path";
+import fs from "fs";
 import { env } from "./config/env";
 import { logger } from "./config/logger";
 import { notFoundHandler, errorHandler } from "./api/middleware/errorHandler";
@@ -39,6 +41,16 @@ export function createApp() {
   app.use("/api/audit", auditRoutes);
   app.use("/api/users", userRoutes);
   app.use("/api", exportRoutes);
+
+  // Serve o frontend buildado (deploy em container único). Em dev, o Vite
+  // roda separado e esta pasta não existe, então é ignorado silenciosamente.
+  const frontendDist = path.resolve(__dirname, "../../frontend/dist");
+  if (fs.existsSync(frontendDist)) {
+    app.use(express.static(frontendDist));
+    app.get(/^\/(?!api).*/, (_req, res) => {
+      res.sendFile(path.join(frontendDist, "index.html"));
+    });
+  }
 
   app.use(notFoundHandler);
   app.use(errorHandler);
