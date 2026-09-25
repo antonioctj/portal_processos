@@ -39,10 +39,21 @@ const MENU = [
 export function AppLayout() {
   const { user, organization, logout } = useAuth();
   const navigate = useNavigate();
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(() => {
+    try {
+      return localStorage.getItem("processai_theme") === "dark";
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
+    try {
+      localStorage.setItem("processai_theme", dark ? "dark" : "light");
+    } catch {
+      // localStorage indisponível (modo privado, etc.) — tema só não persiste.
+    }
   }, [dark]);
 
   return (

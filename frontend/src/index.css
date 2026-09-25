@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Faz as classes dark: responderem à classe .dark no <html> (aplicada via JS
+   pelo botão de alternância de tema), em vez de seguir só a preferência do SO. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 
