@@ -49,7 +49,21 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
       if (!modelerRef.current) return;
       try {
         await modelerRef.current.importXML(xml);
-        modelerRef.current.get("canvas").zoom("fit-viewport");
+        const canvas = modelerRef.current.get("canvas");
+        canvas.zoom("fit-viewport");
+        // Fluxos muito longos (muitas tarefas em sequência) fazem o "encaixar na
+        // tela" encolher demais e ficar ilegível. Nesses casos usa um zoom mínimo
+        // legível e centraliza no início do fluxo — o usuário rola horizontalmente
+        // pra ver o resto, como em qualquer ferramenta de BPMN.
+        const MIN_READABLE_ZOOM = 0.6;
+        if (canvas.zoom() < MIN_READABLE_ZOOM) {
+          canvas.zoom(MIN_READABLE_ZOOM);
+          const elementRegistry = modelerRef.current.get("elementRegistry");
+          const start = elementRegistry
+            .getAll()
+            .find((el: any) => el.type === "bpmn:StartEvent");
+          if (start) canvas.scrollToElement(start);
+        }
       } catch (err) {
         console.error("Falha ao importar BPMN", err);
       }
