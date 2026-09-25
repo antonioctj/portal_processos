@@ -46,7 +46,10 @@ export function createApp() {
   // roda separado e esta pasta não existe, então é ignorado silenciosamente.
   const frontendDist = path.resolve(__dirname, "../../frontend/dist");
   if (fs.existsSync(frontendDist)) {
-    app.use(express.static(frontendDist));
+    // dotfiles: "allow" é necessário para o desafio HTTP-01 do Let's Encrypt
+    // (/.well-known/acme-challenge/...), que por padrão o express.static bloqueia
+    // com 404 por começar com ponto.
+    app.use(express.static(frontendDist, { dotfiles: "allow" }));
     app.get(/^\/(?!api).*/, (_req, res) => {
       res.sendFile(path.join(frontendDist, "index.html"));
     });
