@@ -57,19 +57,103 @@ function escapeXml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** Auto-layout simples em grade horizontal, usado quando elementos não possuem posição salva. */
-function autoLayout(elements: XmlElementInput[]): Map<string, { x: number; y: number }> {
+const COLUMN_WIDTH = 220;
+const ROW_HEIGHT = 150;
+const MARGIN_X = 120;
+const MARGIN_Y = 160;
+
+/**
+ * Auto-layout em camadas (estilo Sugiyama): elementos avançam em colunas conforme
+ * a distância (caminho mais longo) desde os pontos de início do fluxo, e ramos
+ * paralelos de um mesmo nível são empilhados verticalmente em vez de ficarem
+ * todos numa única linha. Elementos com posição já salva (ex: editados manualmente
+ * no modelador) mantêm a posição original.
+ */
+function autoLayout(
+  elements: XmlElementInput[],
+  connections: XmlConnectionInput[]
+): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>();
-  let x = 120;
-  const y = 200;
+
+  const fixed = new Set<string>();
   for (const el of elements) {
     if (el.positionX != null && el.positionY != null) {
       positions.set(el.bpmnElementId, { x: el.positionX, y: el.positionY });
-    } else {
-      positions.set(el.bpmnElementId, { x, y });
-      x += 180;
+      fixed.add(el.bpmnElementId);
     }
   }
+
+  const toLayout = elements.filter((el) => !fixed.has(el.bpmnElementId));
+  if (toLayout.length === 0) return positions;
+
+  const idsToLayout = new Set(toLayout.map((el) => el.bpmnElementId));
+  const outgoingMap = new Map<string, string[]>();
+  const incomingCount = new Map<string, number>();
+  for (const el of toLayout) {
+    outgoingMap.set(el.bpmnElementId, []);
+    incomingCount.set(el.bpmnElementId, 0);
+  }
+  for (const c of connections) {
+    if (idsToLayout.has(c.sourceId) && idsToLayout.has(c.targetId)) {
+      outgoingMap.get(c.sourceId)!.push(c.targetId);
+      incomingCount.set(c.targetId, (incomingCount.get(c.targetId) ?? 0) + 1);
+    }
+  }
+
+  // Nível = caminho mais longo desde uma raiz (elemento sem entrada), calculado
+  // via ordenação topológica (Kahn): cada nó só é processado depois de todos os
+  // seus predecessores, garantindo que o nível reflita o ramo mais distante que
+  // converge nele.
+  const level = new Map<string, number>();
+  const indegree = new Map(incomingCount);
+  const queue: string[] = [];
+  for (const el of toLayout) {
+    if ((indegree.get(el.bpmnElementId) ?? 0) === 0) {
+      level.set(el.bpmnElementId, 0);
+      queue.push(el.bpmnElementId);
+    }
+  }
+
+  let head = 0;
+  while (head < queue.length) {
+    const u = queue[head++];
+    const lu = level.get(u) ?? 0;
+    for (const v of outgoingMap.get(u) ?? []) {
+      const candidate = lu + 1;
+      if (candidate > (level.get(v) ?? -1)) level.set(v, candidate);
+      const remaining = (indegree.get(v) ?? 0) - 1;
+      indegree.set(v, remaining);
+      if (remaining === 0) queue.push(v);
+    }
+  }
+
+  // Nós que sobraram fazem parte de um ciclo (loop de retrabalho) e nunca
+  // atingem grau de entrada zero; recebem colunas próprias em sequência, após
+  // o que já foi calculado, para não travar o layout nem sobrepor elementos.
+  let fallbackLevel = 1 + Math.max(0, ...Array.from(level.values()));
+  for (const el of toLayout) {
+    if (!level.has(el.bpmnElementId)) {
+      level.set(el.bpmnElementId, fallbackLevel);
+      fallbackLevel += 1;
+    }
+  }
+
+  const byLevel = new Map<number, XmlElementInput[]>();
+  for (const el of toLayout) {
+    const lvl = level.get(el.bpmnElementId) ?? 0;
+    if (!byLevel.has(lvl)) byLevel.set(lvl, []);
+    byLevel.get(lvl)!.push(el);
+  }
+
+  for (const [lvl, elsInLevel] of byLevel) {
+    const x = MARGIN_X + lvl * COLUMN_WIDTH;
+    const offset = (elsInLevel.length - 1) / 2;
+    elsInLevel.forEach((el, i) => {
+      const y = MARGIN_Y + (i - offset) * ROW_HEIGHT;
+      positions.set(el.bpmnElementId, { x, y });
+    });
+  }
+
   return positions;
 }
 
@@ -79,8 +163,15 @@ export function buildBpmnXml(
   elements: XmlElementInput[],
   connections: XmlConnectionInput[]
 ): string {
-  const positions = autoLayout(elements);
+  const positions = autoLayout(elements, connections);
   const processIdSafe = `Process_${processId.replace(/-/g, "").slice(0, 16)}`;
+
+  const bounds = new Map<string, { x: number; y: number; w: number; h: number }>();
+  for (const el of elements) {
+    const pos = positions.get(el.bpmnElementId) ?? { x: MARGIN_X, y: MARGIN_Y };
+    const size = DEFAULT_SIZE[el.type] ?? { w: 100, h: 80 };
+    bounds.set(el.bpmnElementId, { x: pos.x, y: pos.y, w: el.width ?? size.w, h: el.height ?? size.h });
+  }
 
   const flowElementsXml = elements
     .map((el) => {
@@ -104,23 +195,38 @@ export function buildBpmnXml(
 
   const shapesXml = elements
     .map((el) => {
-      const pos = positions.get(el.bpmnElementId) ?? { x: 120, y: 200 };
-      const size = DEFAULT_SIZE[el.type] ?? { w: 100, h: 80 };
-      const w = el.width ?? size.w;
-      const h = el.height ?? size.h;
+      const b = bounds.get(el.bpmnElementId)!;
       return `<bpmndi:BPMNShape id="${el.bpmnElementId}_di" bpmnElement="${el.bpmnElementId}">
-        <dc:Bounds x="${pos.x}" y="${pos.y}" width="${w}" height="${h}" />
+        <dc:Bounds x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" />
       </bpmndi:BPMNShape>`;
     })
     .join("\n      ");
 
   const edgesXml = connections
     .map((c) => {
-      const sourcePos = positions.get(c.sourceId) ?? { x: 0, y: 0 };
-      const targetPos = positions.get(c.targetId) ?? { x: 0, y: 0 };
+      const source = bounds.get(c.sourceId);
+      const target = bounds.get(c.targetId);
+      if (!source || !target) return "";
+      const sourceCenterY = source.y + source.h / 2;
+      const targetCenterY = target.y + target.h / 2;
+      // Sai pela direita do elemento de origem e entra pela esquerda do destino;
+      // quando estão em linhas diferentes, insere um ponto intermediário em "L"
+      // para a seta não cruzar por cima de outros elementos.
+      const waypoints =
+        sourceCenterY === targetCenterY
+          ? [
+              { x: source.x + source.w, y: sourceCenterY },
+              { x: target.x, y: targetCenterY },
+            ]
+          : [
+              { x: source.x + source.w, y: sourceCenterY },
+              { x: source.x + source.w + (COLUMN_WIDTH - source.w) / 2, y: sourceCenterY },
+              { x: source.x + source.w + (COLUMN_WIDTH - source.w) / 2, y: targetCenterY },
+              { x: target.x, y: targetCenterY },
+            ];
+      const waypointsXml = waypoints.map((p) => `<di:waypoint x="${p.x}" y="${p.y}" />`).join("\n        ");
       return `<bpmndi:BPMNEdge id="${c.bpmnFlowId}_di" bpmnElement="${c.bpmnFlowId}">
-        <di:waypoint x="${sourcePos.x + 50}" y="${sourcePos.y + 20}" />
-        <di:waypoint x="${targetPos.x}" y="${targetPos.y + 20}" />
+        ${waypointsXml}
       </bpmndi:BPMNEdge>`;
     })
     .join("\n      ");
