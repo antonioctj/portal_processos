@@ -1,0 +1,23 @@
+[Unit]
+Description=ProcessAI backend (API Node.js/Express)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=__APP_USER__
+Group=__APP_USER__
+WorkingDirectory=__APP_DIR__/backend
+EnvironmentFile=__APP_DIR__/backend/.env
+ExecStart=/usr/bin/node __APP_DIR__/backend/dist/server.js
+Restart=always
+RestartSec=5
+# Hardening básico
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=__APP_DIR__/backend/storage
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
