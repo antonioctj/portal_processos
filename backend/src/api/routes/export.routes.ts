@@ -6,6 +6,9 @@ import { NotFoundError } from "../../utils/errors";
 import { regenerateXml } from "../../bpmn/bpmn.service";
 import { buildExecutivePdf } from "../../reports/report.service";
 import { recordAudit } from "../../audit/audit.service";
+import { resolveOrgProvider } from "../../ai/aiProviderFactory";
+import { recordAiUsage } from "../../ai/aiUsage.service";
+import { getMemoryContext } from "../../memory/memory.service";
 
 const router = Router();
 router.use(requireAuth);
@@ -61,7 +64,30 @@ router.get(
       }),
     ]);
 
-    const pdfBuffer = await buildExecutivePdf({ process, gaps, opportunities, version });
+    let aiSummary: string | null = null;
+    try {
+      const { provider, record } = await resolveOrgProvider(req.auth!.organizationId);
+      const memoryContext = await getMemoryContext(req.auth!.organizationId);
+      const summary = await provider.generateReport(
+        { process, gaps, opportunities, elements: version?.elements ?? [] },
+        memoryContext
+      );
+      aiSummary = summary.data || null;
+      await recordAiUsage({
+        organizationId: req.auth!.organizationId,
+        providerId: record?.id,
+        userId: req.auth!.userId,
+        processId: process.id,
+        purpose: "report_generation",
+        model: record?.generationModel ?? undefined,
+        inputTokens: summary.usage.inputTokens,
+        outputTokens: summary.usage.outputTokens,
+      });
+    } catch {
+      // Resumo por IA é um complemento opcional; o relatório segue com o texto padrão.
+    }
+
+    const pdfBuffer = await buildExecutivePdf({ process, gaps, opportunities, version, aiSummary });
 
     await recordAudit({
       organizationId: req.auth!.organizationId,

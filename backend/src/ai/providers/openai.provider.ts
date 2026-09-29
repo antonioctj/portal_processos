@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { PROMPTS } from "../prompts";
-import { parseJsonOrThrow } from "./base";
+import { parseJsonOrThrow, withMemoryContext } from "./base";
 import type {
   AIProvider,
   AIProviderConfig,
@@ -101,33 +101,35 @@ export class OpenAIProvider implements AIProvider {
     return { data: parsed.opportunities ?? [], usage: result.usage };
   }
 
-  async generateProcess(description: string): Promise<AIResult<ExtractedProcess>> {
+  async generateProcess(description: string, memoryContext?: string): Promise<AIResult<ExtractedProcess>> {
     const prompt = PROMPTS.generateProcess;
-    const result = await this.complete(prompt.system, description, this.generationModel);
+    const user = withMemoryContext(description, memoryContext);
+    const result = await this.complete(prompt.system, user, this.generationModel);
     return { data: parseJsonOrThrow(result.data, "generateProcess"), usage: result.usage };
   }
 
-  async generateBPMN(process: ExtractedProcess): Promise<AIResult<BpmnDraft>> {
+  async generateBPMN(process: ExtractedProcess, memoryContext?: string): Promise<AIResult<BpmnDraft>> {
     const prompt = PROMPTS.generateBpmn;
-    const result = await this.complete(
-      prompt.system,
-      JSON.stringify(process),
-      this.generationModel
-    );
+    const user = withMemoryContext(JSON.stringify(process), memoryContext);
+    const result = await this.complete(prompt.system, user, this.generationModel);
     return { data: parseJsonOrThrow(result.data, "generateBPMN"), usage: result.usage };
   }
 
   async refineBPMN(
     currentBpmn: BpmnDraft,
     instruction: string,
-    conversationHistory: { role: "user" | "assistant"; content: string }[]
+    conversationHistory: { role: "user" | "assistant"; content: string }[],
+    memoryContext?: string
   ): Promise<AIResult<ChatReply>> {
     const prompt = PROMPTS.refineBpmn;
     const historyText = conversationHistory
       .slice(-10)
       .map((m) => `${m.role === "user" ? "Usuário" : "Assistente"}: ${m.content}`)
       .join("\n");
-    const user = `BPMN atual:\n${JSON.stringify(currentBpmn)}\n\nHistórico da conversa:\n${historyText}\n\nNova instrução do usuário:\n${instruction}`;
+    const user = withMemoryContext(
+      `BPMN atual:\n${JSON.stringify(currentBpmn)}\n\nHistórico da conversa:\n${historyText}\n\nNova instrução do usuário:\n${instruction}`,
+      memoryContext
+    );
     const result = await this.complete(prompt.system, user, this.generationModel);
     return { data: parseJsonOrThrow(result.data, "refineBPMN"), usage: result.usage };
   }
@@ -138,7 +140,7 @@ export class OpenAIProvider implements AIProvider {
     return { data: parseJsonOrThrow(result.data, "analyzeBPMN"), usage: result.usage };
   }
 
-  async generateReport(payload: Record<string, unknown>): Promise<AIResult<string>> {
+  async generateReport(payload: Record<string, unknown>, memoryContext?: string): Promise<AIResult<string>> {
     const prompt = PROMPTS.executiveReport;
     const response = await this.client.chat.completions.create({
       model: this.generationModel,
@@ -146,7 +148,7 @@ export class OpenAIProvider implements AIProvider {
       max_tokens: this.maxTokens,
       messages: [
         { role: "system", content: prompt.system },
-        { role: "user", content: JSON.stringify(payload) },
+        { role: "user", content: withMemoryContext(JSON.stringify(payload), memoryContext) },
       ],
     });
     const content = response.choices[0]?.message?.content ?? "";

@@ -1,15 +1,28 @@
 import { useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, FileText, Network, Upload } from "lucide-react";
+import { Download, FileText, Network, Plus, Trash2, Upload, ImagePlus, GripVertical } from "lucide-react";
 import { api, apiErrorMessage } from "../../lib/api";
 import { PageHeader } from "../../layouts/AppLayout";
-import { Badge, Button, Card, ConfidenceBadge, EmptyState, Spinner } from "../../components/ui";
+import { Badge, Button, Card, ConfidenceBadge, EmptyState, Input, Label, Spinner, Textarea } from "../../components/ui";
 import { AnalysisProgress } from "../../components/AnalysisProgress";
 import { useAnalysisStream } from "../../hooks/useAnalysisStream";
-import type { ExtractedProcess } from "../../types/api";
+import type { ArchitectureSystem, ExtractedProcess, MacroFlowPhase, ProcessRule, ProcessScreen } from "../../types/api";
 
-const TABS = ["overview", "inputs", "activities", "outputs", "decisions", "exceptions", "documents", "versions"] as const;
+const TABS = [
+  "overview",
+  "inputs",
+  "activities",
+  "outputs",
+  "decisions",
+  "exceptions",
+  "rules",
+  "screens",
+  "macroFlow",
+  "architecture",
+  "documents",
+  "versions",
+] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   overview: "Visão geral",
@@ -18,6 +31,10 @@ const TAB_LABEL: Record<Tab, string> = {
   outputs: "Saídas",
   decisions: "Decisões",
   exceptions: "Exceções",
+  rules: "Regras",
+  screens: "Telas",
+  macroFlow: "Macro Fluxo",
+  architecture: "Arquitetura",
   documents: "Documentos",
   versions: "Versões",
 };
@@ -148,6 +165,10 @@ export function ProcessDetailPage() {
           {tab === "outputs" && <OutputsTab structured={structured} />}
           {tab === "decisions" && <DecisionsTab structured={structured} />}
           {tab === "exceptions" && <ExceptionsTab structured={structured} />}
+          {tab === "rules" && <RulesTab processId={id!} />}
+          {tab === "screens" && <ScreensTab processId={id!} />}
+          {tab === "macroFlow" && <MacroFlowTab processId={id!} initial={process.macroFlow} />}
+          {tab === "architecture" && <ArchitectureTab processId={id!} initial={process.architecture} />}
           {tab === "documents" && <DocumentsTab process={process} />}
           {tab === "versions" && <VersionsTab versions={versionsQuery.data} />}
         </div>
@@ -380,6 +401,310 @@ function ExceptionsTab({ structured }: { structured: ExtractedProcess | null }) 
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Tratamento: {ex.handling || "Não identificado no documento"}</p>
         </Card>
       ))}
+    </div>
+  );
+}
+
+function RulesTab({ processId }: { processId: string }) {
+  const queryClient = useQueryClient();
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const rulesQuery = useQuery({
+    queryKey: ["process-rules", processId],
+    queryFn: async () => (await api.get<ProcessRule[]>(`/processes/${processId}/rules`)).data,
+  });
+
+  async function addRule() {
+    if (!title.trim() || !description.trim()) return;
+    setSaving(true);
+    try {
+      await api.post(`/processes/${processId}/rules`, { title, description });
+      setTitle("");
+      setDescription("");
+      queryClient.invalidateQueries({ queryKey: ["process-rules", processId] });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeRule(id: string) {
+    await api.delete(`/rules/${id}`);
+    queryClient.invalidateQueries({ queryKey: ["process-rules", processId] });
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-4">
+        <h3 className="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">Nova regra de negócio</h3>
+        <div className="space-y-2">
+          <div>
+            <Label>Título</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex: Limite de alçada" />
+          </div>
+          <div>
+            <Label>Descrição</Label>
+            <Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+          <Button onClick={addRule} disabled={saving || !title.trim() || !description.trim()}>
+            <Plus className="h-4 w-4" /> Adicionar regra
+          </Button>
+        </div>
+      </Card>
+
+      {rulesQuery.isLoading ? (
+        <Spinner className="h-6 w-6 text-brand-600" />
+      ) : !rulesQuery.data || rulesQuery.data.length === 0 ? (
+        <EmptyState title="Nenhuma regra cadastrada" description="Adicione as regras de negócio que o processo deve seguir." />
+      ) : (
+        <div className="space-y-2">
+          {rulesQuery.data.map((rule) => (
+            <Card key={rule.id} className="flex items-start justify-between gap-3 p-4">
+              <div>
+                <p className="font-medium text-slate-800 dark:text-slate-100">{rule.title}</p>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{rule.description}</p>
+              </div>
+              <button
+                onClick={() => removeRule(rule.id)}
+                className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ScreensTab({ processId }: { processId: string }) {
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [systemName, setSystemName] = useState("");
+  const [stepName, setStepName] = useState("");
+  const [description, setDescription] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const screensQuery = useQuery({
+    queryKey: ["process-screens", processId],
+    queryFn: async () => (await api.get<ProcessScreen[]>(`/processes/${processId}/screens`)).data,
+  });
+
+  async function uploadScreen() {
+    const file = fileInputRef.current?.files?.[0];
+    if (!file || !systemName.trim()) return;
+    setError(null);
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("systemName", systemName);
+      if (stepName) formData.append("stepName", stepName);
+      if (description) formData.append("description", description);
+      await api.post(`/processes/${processId}/screens`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setSystemName("");
+      setStepName("");
+      setDescription("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      queryClient.invalidateQueries({ queryKey: ["process-screens", processId] });
+    } catch (err) {
+      setError(apiErrorMessage(err));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removeScreen(id: string) {
+    await api.delete(`/screens/${id}`);
+    queryClient.invalidateQueries({ queryKey: ["process-screens", processId] });
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-4">
+        <h3 className="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">Anexar tela de sistema</h3>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div>
+            <Label>Sistema *</Label>
+            <Input value={systemName} onChange={(e) => setSystemName(e.target.value)} placeholder="Ex: CRM" />
+          </div>
+          <div>
+            <Label>Etapa</Label>
+            <Input value={stepName} onChange={(e) => setStepName(e.target.value)} placeholder="Ex: Confirmação de cadastro" />
+          </div>
+          <div className="sm:col-span-2">
+            <Label>Descrição</Label>
+            <Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+          <div className="sm:col-span-2">
+            <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="block w-full text-xs text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-xs file:font-medium file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-brand-900/30 dark:file:text-brand-300" />
+          </div>
+        </div>
+        {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+        <Button className="mt-3" onClick={uploadScreen} disabled={uploading || !systemName.trim()}>
+          <ImagePlus className="h-4 w-4" /> {uploading ? "Enviando..." : "Anexar tela"}
+        </Button>
+      </Card>
+
+      {screensQuery.isLoading ? (
+        <Spinner className="h-6 w-6 text-brand-600" />
+      ) : !screensQuery.data || screensQuery.data.length === 0 ? (
+        <EmptyState title="Nenhuma tela anexada" description="Anexe prints das telas dos sistemas usados no processo." />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {screensQuery.data.map((screen) => (
+            <Card key={screen.id} className="overflow-hidden p-0">
+              <img src={screen.url} alt={screen.systemName} className="h-40 w-full object-cover" />
+              <div className="p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-slate-800 dark:text-slate-100">{screen.systemName}</p>
+                    {screen.stepName && <p className="text-xs text-slate-500 dark:text-slate-400">{screen.stepName}</p>}
+                  </div>
+                  <button
+                    onClick={() => removeScreen(screen.id)}
+                    className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {screen.description && <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{screen.description}</p>}
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MacroFlowTab({ processId, initial }: { processId: string; initial: MacroFlowPhase[] | null }) {
+  const queryClient = useQueryClient();
+  const [phases, setPhases] = useState<MacroFlowPhase[]>(initial ?? []);
+  const [saving, setSaving] = useState(false);
+
+  function update(i: number, patch: Partial<MacroFlowPhase>) {
+    setPhases((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  }
+
+  function move(i: number, dir: -1 | 1) {
+    setPhases((prev) => {
+      const next = [...prev];
+      const j = i + dir;
+      if (j < 0 || j >= next.length) return prev;
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      await api.patch(`/processes/${processId}/macro-flow`, { phases });
+      queryClient.invalidateQueries({ queryKey: ["process", processId] });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      {phases.map((phase, i) => (
+        <Card key={i} className="flex items-start gap-3 p-4">
+          <div className="flex flex-col gap-1 pt-1 text-slate-300">
+            <button onClick={() => move(i, -1)} disabled={i === 0} className="disabled:opacity-30">
+              <GripVertical className="h-4 w-4 rotate-90" />
+            </button>
+          </div>
+          <div className="flex-1 space-y-2">
+            <Input value={phase.title} onChange={(e) => update(i, { title: e.target.value })} placeholder={`Fase ${i + 1}`} />
+            <Textarea rows={2} value={phase.description ?? ""} onChange={(e) => update(i, { description: e.target.value })} placeholder="Descrição curta da fase" />
+          </div>
+          <button
+            onClick={() => setPhases((prev) => prev.filter((_, idx) => idx !== i))}
+            className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </Card>
+      ))}
+      <div className="flex gap-2">
+        <Button variant="secondary" onClick={() => setPhases((prev) => [...prev, { title: "", description: "" }])}>
+          <Plus className="h-4 w-4" /> Nova fase
+        </Button>
+        <Button onClick={save} disabled={saving}>
+          {saving ? "Salvando..." : "Salvar macro fluxo"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ArchitectureTab({ processId, initial }: { processId: string; initial: ArchitectureSystem[] | null }) {
+  const queryClient = useQueryClient();
+  const [systems, setSystems] = useState<ArchitectureSystem[]>(initial ?? []);
+  const [saving, setSaving] = useState(false);
+
+  function update(i: number, patch: Partial<ArchitectureSystem>) {
+    setSystems((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      await api.patch(`/processes/${processId}/architecture`, { systems });
+      queryClient.invalidateQueries({ queryKey: ["process", processId] });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      {systems.map((sys, i) => (
+        <Card key={i} className="p-4">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div>
+              <Label>Sistema</Label>
+              <Input value={sys.system} onChange={(e) => update(i, { system: e.target.value })} placeholder="Ex: SAP" />
+            </div>
+            <div>
+              <Label>Tipo</Label>
+              <Input value={sys.type ?? ""} onChange={(e) => update(i, { type: e.target.value })} placeholder="Ex: ERP" />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Descrição</Label>
+              <Textarea rows={2} value={sys.description ?? ""} onChange={(e) => update(i, { description: e.target.value })} />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Integra com (separado por vírgula)</Label>
+              <Input value={sys.integratesWith ?? ""} onChange={(e) => update(i, { integratesWith: e.target.value })} placeholder="Ex: CRM, Financeiro" />
+            </div>
+          </div>
+          <button
+            onClick={() => setSystems((prev) => prev.filter((_, idx) => idx !== i))}
+            className="mt-2 flex items-center gap-1 text-xs text-red-600 hover:underline"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Remover sistema
+          </button>
+        </Card>
+      ))}
+      <div className="flex gap-2">
+        <Button
+          variant="secondary"
+          onClick={() => setSystems((prev) => [...prev, { system: "", type: "", description: "", integratesWith: "" }])}
+        >
+          <Plus className="h-4 w-4" /> Novo sistema
+        </Button>
+        <Button onClick={save} disabled={saving}>
+          {saving ? "Salvando..." : "Salvar arquitetura"}
+        </Button>
+      </div>
     </div>
   );
 }

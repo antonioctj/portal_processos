@@ -13,6 +13,7 @@ import { DocumentLibraryPage } from "./pages/documents/DocumentLibraryPage";
 import { GapsOpportunitiesPage } from "./pages/gaps/GapsOpportunitiesPage";
 import { AssistantPage } from "./pages/assistant/AssistantPage";
 import { AiProvidersPage } from "./pages/settings/AiProvidersPage";
+import { MemoryPage } from "./pages/memory/MemoryPage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
 import { ReportsPage } from "./pages/reports/ReportsPage";
 import { AuditPage } from "./pages/audit/AuditPage";
@@ -58,6 +59,7 @@ export default function App() {
         <Route path="/assistant" element={<AssistantPage />} />
         <Route path="/assistant/:processId" element={<AssistantPage />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/memory" element={<MemoryPage />} />
         <Route path="/audit" element={<AuditPage />} />
         <Route path="/users" element={<UsersPage />} />
         <Route path="/settings" element={<SettingsPage />} />

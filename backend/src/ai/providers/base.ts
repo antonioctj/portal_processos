@@ -19,3 +19,9 @@ export function parseJsonOrThrow<T>(raw: string, context: string): T {
     );
   }
 }
+
+/** Prefixa a mensagem do usuário com os padrões/modelos de Memória da organização, quando houver. */
+export function withMemoryContext(user: string, memoryContext?: string): string {
+  if (!memoryContext) return user;
+  return `Padrões e modelos da organização a seguir (Memória):\n${memoryContext}\n\n${user}`;
+}

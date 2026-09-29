@@ -28,15 +28,16 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users         User[]
-  projects      Project[]
-  processes     Process[]
-  documents     Document[]
-  aiProviders   AIProvider[]
-  aiUsage       AIUsage[]
-  auditLogs     AuditLog[]
-  gaps          Gap[]
-  opportunities Opportunity[]
+  users           User[]
+  projects        Project[]
+  processes       Process[]
+  documents       Document[]
+  aiProviders     AIProvider[]
+  aiUsage         AIUsage[]
+  auditLogs       AuditLog[]
+  gaps            Gap[]
+  opportunities   Opportunity[]
+  memoryTemplates MemoryTemplate[]
 
   @@map("organizations")
 }
@@ -54,15 +55,18 @@ model User {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  ownedProcesses    Process[]        @relation("ProcessOwner")
-  createdProcesses  Process[]        @relation("ProcessCreatedBy")
-  documents         Document[]
-  conversations     Conversation[]
-  messages          Message[]
-  auditLogs         AuditLog[]
-  processVersions   ProcessVersion[]
-  gapsAssigned      Gap[]            @relation("GapResponsible")
-  actionsAssigned   Action[]         @relation("ActionResponsible")
+  ownedProcesses         Process[]        @relation("ProcessOwner")
+  createdProcesses       Process[]        @relation("ProcessCreatedBy")
+  documents              Document[]
+  conversations          Conversation[]
+  messages               Message[]
+  auditLogs              AuditLog[]
+  processVersions        ProcessVersion[]
+  gapsAssigned           Gap[]            @relation("GapResponsible")
+  actionsAssigned        Action[]         @relation("ActionResponsible")
+  createdProcessRules    ProcessRule[]
+  createdProcessScreens  ProcessScreen[]
+  createdMemoryTemplates MemoryTemplate[]
 
   @@index([organizationId])
   @@map("users")
@@ -113,16 +117,18 @@ model Process {
   status         ProcessStatus @default(DRAFT)
   currentVersion String        @default("0.1")
   healthScore    Int?
+  macroFlow      Json? // fases de alto nivel: [{ title, description }]
+  architecture   Json? // sistemas envolvidos: [{ system, type, description, integratesWith }]
   createdById    String
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project      Project?      @relation(fields: [projectId], references: [id])
-  parent       Process?      @relation("ProcessParent", fields: [parentId], references: [id])
-  children     Process[]     @relation("ProcessParent")
-  owner        User?         @relation("ProcessOwner", fields: [ownerId], references: [id])
-  createdBy    User          @relation("ProcessCreatedBy", fields: [createdById], references: [id])
+  project      Project?     @relation(fields: [projectId], references: [id])
+  parent       Process?     @relation("ProcessParent", fields: [parentId], references: [id])
+  children     Process[]    @relation("ProcessParent")
+  owner        User?        @relation("ProcessOwner", fields: [ownerId], references: [id])
+  createdBy    User         @relation("ProcessCreatedBy", fields: [createdById], references: [id])
 
   versions        ProcessVersion[]
   documents       DocumentProcessLink[]
@@ -131,6 +137,8 @@ model Process {
   opportunities   Opportunity[]
   conversations   Conversation[]
   actions         Action[]
+  rules           ProcessRule[]
+  screens         ProcessScreen[]
 
   @@index([organizationId])
   @@index([projectId])
@@ -196,7 +204,7 @@ enum SourceType {
 }
 
 model ProcessElement {
-  id               String          @id @default(uuid())
+  id               String      @id @default(uuid())
   processVersionId String
   bpmnElementId    String
   type             ElementType
@@ -228,8 +236,8 @@ model ProcessElement {
 
   processVersion ProcessVersion @relation(fields: [processVersionId], references: [id], onDelete: Cascade)
 
-  outgoing ProcessConnection[] @relation("ConnectionSource")
-  incoming ProcessConnection[] @relation("ConnectionTarget")
+  outgoing      ProcessConnection[] @relation("ConnectionSource")
+  incoming      ProcessConnection[] @relation("ConnectionTarget")
   gaps          Gap[]
   opportunities Opportunity[]
 
@@ -263,15 +271,15 @@ model ProcessConnection {
 }
 
 model BpmnVersion {
-  id               String   @id @default(uuid())
-  processVersionId String   @unique
-  xml              String   @db.Text
-  svg              String?  @db.Text
+  id               String     @id @default(uuid())
+  processVersionId String     @unique
+  xml              String     @db.Text
+  svg              String?    @db.Text
   healthScore      Int?
   healthBreakdown  Json?
   generatedBy      SourceType @default(MANUAL)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
   processVersion ProcessVersion @relation(fields: [processVersionId], references: [id], onDelete: Cascade)
 
@@ -339,11 +347,11 @@ model DocumentProcessLink {
 }
 
 model DocumentChunk {
-  id         String  @id @default(uuid())
+  id         String @id @default(uuid())
   documentId String
   page       Int?
   order      Int
-  content    String  @db.Text
+  content    String @db.Text
 
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
@@ -379,22 +387,88 @@ enum AnalysisStatus {
 }
 
 model AnalysisResult {
-  id          String         @id @default(uuid())
-  processId   String
-  documentId  String?
-  status      AnalysisStatus @default(PENDING)
-  currentStep AnalysisStep?
-  stepsLog    Json? // histórico de progresso [{step, status, startedAt, finishedAt}]
-  structured  Json? // saída estruturada completa (overview, inputs, activities, outputs, decisions, exceptions)
+  id           String         @id @default(uuid())
+  processId    String
+  documentId   String?
+  status       AnalysisStatus @default(PENDING)
+  currentStep  AnalysisStep?
+  stepsLog     Json? // histórico de progresso [{step, status, startedAt, finishedAt}]
+  structured   Json? // saída estruturada completa (overview, inputs, activities, outputs, decisions, exceptions)
   errorMessage String?
-  startedAt   DateTime       @default(now())
-  finishedAt  DateTime?
+  startedAt    DateTime       @default(now())
+  finishedAt   DateTime?
 
   process  Process   @relation(fields: [processId], references: [id], onDelete: Cascade)
   document Document? @relation(fields: [documentId], references: [id])
 
   @@index([processId])
   @@map("analysis_results")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Montagem manual do processo: regras, telas e memória organizacional
+// ─────────────────────────────────────────────────────────────────────────
+
+model ProcessRule {
+  id          String   @id @default(uuid())
+  processId   String
+  title       String
+  description String   @db.Text
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  process   Process @relation(fields: [processId], references: [id], onDelete: Cascade)
+  createdBy User    @relation(fields: [createdById], references: [id])
+
+  @@index([processId])
+  @@map("process_rules")
+}
+
+model ProcessScreen {
+  id          String   @id @default(uuid())
+  processId   String
+  systemName  String
+  stepName    String?
+  description String?  @db.Text
+  storageKey  String
+  mimeType    String
+  sizeBytes   Int
+  createdById String
+  createdAt   DateTime @default(now())
+
+  process   Process @relation(fields: [processId], references: [id], onDelete: Cascade)
+  createdBy User    @relation(fields: [createdById], references: [id])
+
+  @@index([processId])
+  @@map("process_screens")
+}
+
+enum MemoryTemplateType {
+  DOCUMENT_TEMPLATE
+  BPMN_PATTERN
+  EXAMPLE_PROCESS
+}
+
+model MemoryTemplate {
+  id             String             @id @default(uuid())
+  organizationId String
+  type           MemoryTemplateType
+  name           String
+  description    String?
+  content        String?            @db.Text
+  storageKey     String?
+  mimeType       String?
+  sizeBytes      Int?
+  createdById    String
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation(fields: [createdById], references: [id])
+
+  @@index([organizationId])
+  @@map("memory_templates")
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -442,24 +516,24 @@ enum GapStatus {
 }
 
 model Gap {
-  id              String      @id @default(uuid())
-  organizationId  String
-  processId       String
-  elementId       String?
-  category        GapCategory
-  description     String
-  evidence        String?
-  impact          String?
-  severity        Severity    @default(MEDIUM)
-  recommendation  String?
-  status          GapStatus   @default(OPEN)
-  responsibleId   String?
-  dueDate         DateTime?
-  confidence      ConfidenceLevel @default(MEDIUM)
-  sourceType      SourceType      @default(AI_SUGGESTION)
-  sourceRef       String?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id             String          @id @default(uuid())
+  organizationId String
+  processId      String
+  elementId      String?
+  category       GapCategory
+  description    String
+  evidence       String?
+  impact         String?
+  severity       Severity        @default(MEDIUM)
+  recommendation String?
+  status         GapStatus       @default(OPEN)
+  responsibleId  String?
+  dueDate        DateTime?
+  confidence     ConfidenceLevel @default(MEDIUM)
+  sourceType     SourceType      @default(AI_SUGGESTION)
+  sourceRef      String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   process      Process         @relation(fields: [processId], references: [id], onDelete: Cascade)
@@ -509,25 +583,25 @@ enum OpportunityStatus {
 }
 
 model Opportunity {
-  id             String            @id @default(uuid())
-  organizationId String
-  processId      String
-  elementId      String?
-  title          String
-  description    String?
-  currentProblem String?
-  benefit        String?
-  complexity     Complexity        @default(MEDIUM)
-  dependencies   String?
+  id              String            @id @default(uuid())
+  organizationId  String
+  processId       String
+  elementId       String?
+  title           String
+  description     String?
+  currentProblem  String?
+  benefit         String?
+  complexity      Complexity        @default(MEDIUM)
+  dependencies    String?
   systemsInvolved String?
-  solutionType   OpportunityType
-  evidence       String?
-  status         OpportunityStatus @default(IDENTIFIED)
-  confidence     ConfidenceLevel   @default(MEDIUM)
-  sourceType     SourceType        @default(AI_SUGGESTION)
-  sourceRef      String?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  solutionType    OpportunityType
+  evidence        String?
+  status          OpportunityStatus @default(IDENTIFIED)
+  confidence      ConfidenceLevel   @default(MEDIUM)
+  sourceType      SourceType        @default(AI_SUGGESTION)
+  sourceRef       String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   process      Process         @relation(fields: [processId], references: [id], onDelete: Cascade)
@@ -586,23 +660,23 @@ enum AIProviderType {
 }
 
 model AIProvider {
-  id                String         @id @default(uuid())
-  organizationId    String
-  type              AIProviderType
-  label             String
-  apiKeyEncrypted   String? @db.Text
-  apiKeyLast4       String?
-  endpoint          String?
-  temperature       Float          @default(0.2)
-  maxTokens         Int            @default(4096)
-  analysisModel     String?
-  generationModel   String?
-  isActive          Boolean        @default(true)
-  isDefault         Boolean        @default(false)
-  lastTestedAt      DateTime?
-  lastTestOk        Boolean?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  id              String         @id @default(uuid())
+  organizationId  String
+  type            AIProviderType
+  label           String
+  apiKeyEncrypted String?        @db.Text
+  apiKeyLast4     String?
+  endpoint        String?
+  temperature     Float          @default(0.2)
+  maxTokens       Int            @default(4096)
+  analysisModel   String?
+  generationModel String?
+  isActive        Boolean        @default(true)
+  isDefault       Boolean        @default(false)
+  lastTestedAt    DateTime?
+  lastTestOk      Boolean?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   models       AIModel[]

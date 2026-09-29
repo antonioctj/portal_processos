@@ -10,6 +10,7 @@ import { recordAudit } from "../../audit/audit.service";
 import { runProcessAnalysis } from "../../ai/analysis.service";
 import { resolveOrgProvider } from "../../ai/aiProviderFactory";
 import { recordAiUsage } from "../../ai/aiUsage.service";
+import { getMemoryContext } from "../../memory/memory.service";
 import {
   getOrCreateCurrentVersion,
   loadBpmnDraft,
@@ -258,8 +259,9 @@ router.post(
   asyncHandler(async (req, res) => {
     const { description } = z.object({ description: z.string().min(4) }).parse(req.body);
     const { provider, record } = await resolveOrgProvider(req.auth!.organizationId);
+    const memoryContext = await getMemoryContext(req.auth!.organizationId);
 
-    const generated = await provider.generateProcess(description);
+    const generated = await provider.generateProcess(description, memoryContext);
     await recordAiUsage({
       organizationId: req.auth!.organizationId,
       providerId: record?.id,
@@ -283,7 +285,7 @@ router.post(
     });
     const version = await getOrCreateCurrentVersion(process.id, req.auth!.userId);
 
-    const bpmn = await provider.generateBPMN(generated.data);
+    const bpmn = await provider.generateBPMN(generated.data, memoryContext);
     await recordAiUsage({
       organizationId: req.auth!.organizationId,
       providerId: record?.id,
@@ -340,7 +342,8 @@ router.post(
     }
 
     const { provider, record } = await resolveOrgProvider(req.auth!.organizationId);
-    const bpmn = await provider.generateBPMN(lastAnalysis.structured as never);
+    const memoryContext = await getMemoryContext(req.auth!.organizationId);
+    const bpmn = await provider.generateBPMN(lastAnalysis.structured as never, memoryContext);
     await recordAiUsage({
       organizationId: req.auth!.organizationId,
       providerId: record?.id,
@@ -578,6 +581,78 @@ router.post(
     });
 
     res.json(target);
+  })
+);
+
+// ── Macro fluxo (fases de alto nível) e arquitetura (sistemas envolvidos) ──
+const macroFlowSchema = z.object({
+  phases: z.array(z.object({ title: z.string().min(1), description: z.string().optional() })),
+});
+
+router.patch(
+  "/:id/macro-flow",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { phases } = macroFlowSchema.parse(req.body);
+    const existing = await prisma.process.findFirst({
+      where: { id: req.params.id, organizationId: req.auth!.organizationId },
+    });
+    if (!existing) throw new NotFoundError("Processo não encontrado");
+
+    const process = await prisma.process.update({
+      where: { id: existing.id },
+      data: { macroFlow: phases as never },
+    });
+
+    await recordAudit({
+      organizationId: req.auth!.organizationId,
+      userId: req.auth!.userId,
+      action: "UPDATE",
+      entity: "process_macro_flow",
+      entityId: process.id,
+      processId: process.id,
+    });
+
+    res.json({ macroFlow: process.macroFlow });
+  })
+);
+
+const architectureSchema = z.object({
+  systems: z.array(
+    z.object({
+      system: z.string().min(1),
+      type: z.string().optional(),
+      description: z.string().optional(),
+      integratesWith: z.string().optional(),
+    })
+  ),
+});
+
+router.patch(
+  "/:id/architecture",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { systems } = architectureSchema.parse(req.body);
+    const existing = await prisma.process.findFirst({
+      where: { id: req.params.id, organizationId: req.auth!.organizationId },
+    });
+    if (!existing) throw new NotFoundError("Processo não encontrado");
+
+    const process = await prisma.process.update({
+      where: { id: existing.id },
+      data: { architecture: systems as never },
+    });
+
+    await recordAudit({
+      organizationId: req.auth!.organizationId,
+      userId: req.auth!.userId,
+      action: "UPDATE",
+      entity: "process_architecture",
+      entityId: process.id,
+      processId: process.id,
+    });
+
+    res.json({ architecture: process.architecture });
   })
 );
 

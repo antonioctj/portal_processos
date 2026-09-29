@@ -18,6 +18,9 @@ import dashboardRoutes from "./api/routes/dashboard.routes";
 import auditRoutes from "./api/routes/audit.routes";
 import exportRoutes from "./api/routes/export.routes";
 import userRoutes from "./api/routes/user.routes";
+import processRuleRoutes from "./api/routes/processRule.routes";
+import processScreenRoutes from "./api/routes/processScreen.routes";
+import memoryRoutes from "./api/routes/memory.routes";
 
 export function createApp() {
   const app = express();
@@ -41,6 +44,9 @@ export function createApp() {
   app.use("/api/audit", auditRoutes);
   app.use("/api/users", userRoutes);
   app.use("/api", exportRoutes);
+  app.use("/api", processRuleRoutes);
+  app.use("/api", processScreenRoutes);
+  app.use("/api/memory", memoryRoutes);
 
   // Serve o frontend buildado (deploy em container único). Em dev, o Vite
   // roda separado e esta pasta não existe, então é ignorado silenciosamente.

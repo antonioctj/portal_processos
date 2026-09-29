@@ -30,6 +30,18 @@ export interface ProcessSummary {
   _count?: { gaps: number; opportunities: number };
 }
 
+export interface MacroFlowPhase {
+  title: string;
+  description?: string;
+}
+
+export interface ArchitectureSystem {
+  system: string;
+  type?: string;
+  description?: string;
+  integratesWith?: string;
+}
+
 export interface ProcessDetail extends ProcessSummary {
   description: string | null;
   objective: string | null;
@@ -41,6 +53,46 @@ export interface ProcessDetail extends ProcessSummary {
   gaps: Gap[];
   opportunities: Opportunity[];
   documents: { document: DocumentItem }[];
+  macroFlow: MacroFlowPhase[] | null;
+  architecture: ArchitectureSystem[] | null;
+}
+
+export interface ProcessRule {
+  id: string;
+  processId: string;
+  title: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProcessScreen {
+  id: string;
+  processId: string;
+  systemName: string;
+  stepName: string | null;
+  description: string | null;
+  storageKey: string;
+  mimeType: string;
+  sizeBytes: number;
+  url: string;
+  createdAt: string;
+}
+
+export type MemoryTemplateType = "DOCUMENT_TEMPLATE" | "BPMN_PATTERN" | "EXAMPLE_PROCESS";
+
+export interface MemoryTemplate {
+  id: string;
+  organizationId: string;
+  type: MemoryTemplateType;
+  name: string;
+  description: string | null;
+  content: string | null;
+  storageKey: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  url: string | null;
+  createdAt: string;
 }
 
 export type ConfidenceLevel = "HIGH" | "MEDIUM" | "LOW";

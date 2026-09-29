@@ -212,13 +212,14 @@ export interface AIProvider {
   extractProcess(text: string): Promise<AIResult<ExtractedProcess>>;
   identifyGaps(process: ExtractedProcess): Promise<AIResult<IdentifiedGap[]>>;
   identifyOpportunities(process: ExtractedProcess): Promise<AIResult<IdentifiedOpportunity[]>>;
-  generateProcess(description: string): Promise<AIResult<ExtractedProcess>>;
-  generateBPMN(process: ExtractedProcess): Promise<AIResult<BpmnDraft>>;
+  generateProcess(description: string, memoryContext?: string): Promise<AIResult<ExtractedProcess>>;
+  generateBPMN(process: ExtractedProcess, memoryContext?: string): Promise<AIResult<BpmnDraft>>;
   refineBPMN(
     currentBpmn: BpmnDraft,
     instruction: string,
-    conversationHistory: { role: "user" | "assistant"; content: string }[]
+    conversationHistory: { role: "user" | "assistant"; content: string }[],
+    memoryContext?: string
   ): Promise<AIResult<ChatReply>>;
   analyzeBPMN(bpmn: BpmnDraft): Promise<AIResult<BpmnHealthReport>>;
-  generateReport(payload: Record<string, unknown>): Promise<AIResult<string>>;
+  generateReport(payload: Record<string, unknown>, memoryContext?: string): Promise<AIResult<string>>;
 }

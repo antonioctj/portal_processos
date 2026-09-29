@@ -8,6 +8,7 @@ import { resolveOrgProvider } from "../../ai/aiProviderFactory";
 import { recordAiUsage } from "../../ai/aiUsage.service";
 import { recordAudit } from "../../audit/audit.service";
 import { getOrCreateCurrentVersion, loadBpmnDraft, replaceVersionBpmn } from "../../bpmn/bpmn.service";
+import { getMemoryContext } from "../../memory/memory.service";
 
 const router = Router();
 router.use(requireAuth);
@@ -65,12 +66,14 @@ router.post(
     const currentDraft = await loadBpmnDraft(version.id);
 
     const { provider, record } = await resolveOrgProvider(req.auth!.organizationId);
+    const memoryContext = await getMemoryContext(req.auth!.organizationId);
     const reply = await provider.refineBPMN(
       currentDraft,
       content,
       history
         .filter((m) => m.role !== "SYSTEM")
-        .map((m) => ({ role: m.role === "USER" ? "user" : "assistant", content: m.content }))
+        .map((m) => ({ role: m.role === "USER" ? "user" : "assistant", content: m.content })),
+      memoryContext
     );
 
     await recordAiUsage({

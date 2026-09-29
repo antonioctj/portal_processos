@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { PROMPTS } from "../prompts";
-import { parseJsonOrThrow } from "./base";
+import { parseJsonOrThrow, withMemoryContext } from "./base";
 import type {
   AIProvider,
   AIProviderConfig,
@@ -103,33 +103,35 @@ export class AnthropicProvider implements AIProvider {
     return { data: parsed.opportunities ?? [], usage: result.usage };
   }
 
-  async generateProcess(description: string): Promise<AIResult<ExtractedProcess>> {
+  async generateProcess(description: string, memoryContext?: string): Promise<AIResult<ExtractedProcess>> {
     const prompt = PROMPTS.generateProcess;
-    const result = await this.complete(prompt.system, description, this.generationModel);
+    const user = withMemoryContext(description, memoryContext);
+    const result = await this.complete(prompt.system, user, this.generationModel);
     return { data: parseJsonOrThrow(result.data, "generateProcess"), usage: result.usage };
   }
 
-  async generateBPMN(process: ExtractedProcess): Promise<AIResult<BpmnDraft>> {
+  async generateBPMN(process: ExtractedProcess, memoryContext?: string): Promise<AIResult<BpmnDraft>> {
     const prompt = PROMPTS.generateBpmn;
-    const result = await this.complete(
-      prompt.system,
-      JSON.stringify(process),
-      this.generationModel
-    );
+    const user = withMemoryContext(JSON.stringify(process), memoryContext);
+    const result = await this.complete(prompt.system, user, this.generationModel);
     return { data: parseJsonOrThrow(result.data, "generateBPMN"), usage: result.usage };
   }
 
   async refineBPMN(
     currentBpmn: BpmnDraft,
     instruction: string,
-    conversationHistory: { role: "user" | "assistant"; content: string }[]
+    conversationHistory: { role: "user" | "assistant"; content: string }[],
+    memoryContext?: string
   ): Promise<AIResult<ChatReply>> {
     const prompt = PROMPTS.refineBpmn;
     const historyText = conversationHistory
       .slice(-10)
       .map((m) => `${m.role === "user" ? "Usuário" : "Assistente"}: ${m.content}`)
       .join("\n");
-    const user = `BPMN atual:\n${JSON.stringify(currentBpmn)}\n\nHistórico da conversa:\n${historyText}\n\nNova instrução do usuário:\n${instruction}`;
+    const user = withMemoryContext(
+      `BPMN atual:\n${JSON.stringify(currentBpmn)}\n\nHistórico da conversa:\n${historyText}\n\nNova instrução do usuário:\n${instruction}`,
+      memoryContext
+    );
     const result = await this.complete(prompt.system, user, this.generationModel);
     return { data: parseJsonOrThrow(result.data, "refineBPMN"), usage: result.usage };
   }
@@ -140,13 +142,13 @@ export class AnthropicProvider implements AIProvider {
     return { data: parseJsonOrThrow(result.data, "analyzeBPMN"), usage: result.usage };
   }
 
-  async generateReport(payload: Record<string, unknown>): Promise<AIResult<string>> {
+  async generateReport(payload: Record<string, unknown>, memoryContext?: string): Promise<AIResult<string>> {
     const prompt = PROMPTS.executiveReport;
     const response = await this.client.messages.create({
       model: this.generationModel,
       max_tokens: this.maxTokens,
       system: prompt.system,
-      messages: [{ role: "user", content: JSON.stringify(payload) }],
+      messages: [{ role: "user", content: withMemoryContext(JSON.stringify(payload), memoryContext) }],
     });
     const block = response.content.find((c) => c.type === "text");
     const text = block && block.type === "text" ? block.text : "";
