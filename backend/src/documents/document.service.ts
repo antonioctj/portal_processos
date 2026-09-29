@@ -6,6 +6,7 @@ import { logger } from "../config/logger";
 import {
   chunkText,
   parseCsvFile,
+  parseDoc,
   parseDocx,
   parseImageOcr,
   parsePdf,
@@ -40,12 +41,13 @@ export function detectDocumentType(filename: string, mimeType: string): Document
   return "OTHER";
 }
 
-async function parseByType(type: DocumentType, buffer: Buffer): Promise<ParsedDocument> {
+async function parseByType(type: DocumentType, buffer: Buffer, filename: string): Promise<ParsedDocument> {
   switch (type) {
     case "PDF":
       return parsePdf(buffer);
     case "DOCX":
-      return parseDocx(buffer);
+      // .doc é o formato binário antigo do Word; .docx é OOXML/ZIP e usa o mammoth.
+      return filename.toLowerCase().endsWith(".doc") ? parseDoc(buffer) : parseDocx(buffer);
     case "XLSX":
       return parseXlsx(buffer);
     case "CSV":
@@ -96,7 +98,7 @@ export async function uploadAndParseDocument(input: UploadInput) {
   }
 
   try {
-    const parsed = await parseByType(type, input.buffer);
+    const parsed = await parseByType(type, input.buffer, input.filename);
     const chunks = chunkText(parsed);
 
     await prisma.$transaction([

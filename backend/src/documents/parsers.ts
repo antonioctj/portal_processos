@@ -1,4 +1,5 @@
 import mammoth from "mammoth";
+import WordExtractor from "word-extractor";
 import ExcelJS from "exceljs";
 import { parse as parseCsv } from "csv-parse/sync";
 import pdfParse from "pdf-parse";
@@ -30,6 +31,14 @@ export async function parsePdf(buffer: Buffer): Promise<ParsedDocument> {
 export async function parseDocx(buffer: Buffer): Promise<ParsedDocument> {
   const result = await mammoth.extractRawText({ buffer });
   return { fullText: result.value, pages: [{ page: null, content: result.value }] };
+}
+
+/** Formato binário antigo do Word (.doc); mammoth só entende o .docx (OOXML/ZIP). */
+export async function parseDoc(buffer: Buffer): Promise<ParsedDocument> {
+  const extractor = new WordExtractor();
+  const extracted = await extractor.extract(buffer);
+  const text = extracted.getBody();
+  return { fullText: text, pages: [{ page: null, content: text }] };
 }
 
 export async function parseXlsx(buffer: Buffer): Promise<ParsedDocument> {
