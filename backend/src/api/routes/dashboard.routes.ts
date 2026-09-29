@@ -10,6 +10,10 @@ router.get(
   "/",
   asyncHandler(async (req, res) => {
     const organizationId = req.auth!.organizationId;
+    const { processId } = req.query as { processId?: string };
+
+    const processFilter = processId ? { organizationId, id: processId } : { organizationId };
+    const scopedFilter = processId ? { organizationId, processId } : { organizationId };
 
     const [
       totalProcesses,
@@ -23,27 +27,27 @@ router.get(
       latestVersions,
       processesWithHealth,
     ] = await Promise.all([
-      prisma.process.count({ where: { organizationId } }),
-      prisma.process.count({ where: { organizationId, status: "IN_ANALYSIS" } }),
-      prisma.process.count({ where: { organizationId, status: { in: ["APPROVED", "PUBLISHED"] } } }),
-      prisma.gap.count({ where: { organizationId } }),
-      prisma.gap.count({ where: { organizationId, severity: "CRITICAL", status: { not: "RESOLVED" } } }),
-      prisma.opportunity.count({ where: { organizationId } }),
-      prisma.opportunity.count({ where: { organizationId, solutionType: { in: ["AUTOMATION", "RPA"] } } }),
+      prisma.process.count({ where: processFilter }),
+      prisma.process.count({ where: { ...processFilter, status: "IN_ANALYSIS" } }),
+      prisma.process.count({ where: { ...processFilter, status: { in: ["APPROVED", "PUBLISHED"] } } }),
+      prisma.gap.count({ where: scopedFilter }),
+      prisma.gap.count({ where: { ...scopedFilter, severity: "CRITICAL", status: { not: "RESOLVED" } } }),
+      prisma.opportunity.count({ where: scopedFilter }),
+      prisma.opportunity.count({ where: { ...scopedFilter, solutionType: { in: ["AUTOMATION", "RPA"] } } }),
       prisma.process.findMany({
-        where: { organizationId },
+        where: processFilter,
         orderBy: { updatedAt: "desc" },
         take: 6,
         select: { id: true, name: true, status: true, healthScore: true, updatedAt: true },
       }),
       prisma.processVersion.findMany({
-        where: { process: { organizationId } },
+        where: processId ? { processId } : { process: { organizationId } },
         orderBy: { createdAt: "desc" },
         take: 6,
         include: { process: { select: { id: true, name: true } }, createdBy: { select: { name: true } } },
       }),
       prisma.process.findMany({
-        where: { organizationId, healthScore: { not: null } },
+        where: { ...processFilter, healthScore: { not: null } },
         select: { healthScore: true },
       }),
     ]);

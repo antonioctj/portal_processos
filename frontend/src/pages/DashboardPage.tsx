@@ -4,6 +4,8 @@ import { AlertTriangle, CheckCircle2, Gauge, Lightbulb, Sparkles, Workflow } fro
 import { api } from "../lib/api";
 import { PageHeader } from "../layouts/AppLayout";
 import { Card, Spinner, Badge } from "../components/ui";
+import { ProcessSelector } from "../components/ProcessSelector";
+import { useSelectedProcess } from "../store/SelectedProcessContext";
 import type { DashboardData } from "../types/api";
 
 function StatCard({
@@ -34,9 +36,10 @@ function StatCard({
 }
 
 export function DashboardPage() {
+  const { processId } = useSelectedProcess();
   const { data, isLoading } = useQuery({
-    queryKey: ["dashboard"],
-    queryFn: async () => (await api.get<DashboardData>("/dashboard")).data,
+    queryKey: ["dashboard", processId],
+    queryFn: async () => (await api.get<DashboardData>("/dashboard", { params: { processId: processId || undefined } })).data,
   });
 
   return (
@@ -44,6 +47,7 @@ export function DashboardPage() {
       <PageHeader
         title="Dashboard"
         description="Visão geral dos processos, gaps e oportunidades identificados pela IA"
+        actions={<ProcessSelector />}
       />
       <div className="p-6">
         {isLoading || !data ? (

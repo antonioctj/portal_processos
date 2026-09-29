@@ -4,18 +4,21 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Send, Sparkles, ZoomIn, ZoomOut, Maximize, Save, Wand2 } from "lucide-react";
 import { api, apiErrorMessage } from "../../lib/api";
 import { PageHeader } from "../../layouts/AppLayout";
-import { Badge, Button, Select, Spinner, Textarea } from "../../components/ui";
+import { Badge, Button, Spinner, Textarea } from "../../components/ui";
+import { ProcessSelector } from "../../components/ProcessSelector";
+import { useSelectedProcess } from "../../store/SelectedProcessContext";
 import { BpmnCanvas, type BpmnCanvasHandle } from "../../components/bpmn/BpmnCanvas";
 import { EMPTY_DIAGRAM_XML, KIND_LABEL } from "../../lib/bpmnConstants";
-import type { BpmnDraft, BpmnHealthReport, Message, ProcessSummary } from "../../types/api";
+import type { BpmnDraft, BpmnHealthReport, Message } from "../../types/api";
 
 export function AssistantPage() {
   const { processId: paramProcessId } = useParams<{ processId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const canvasRef = useRef<BpmnCanvasHandle>(null);
+  const { processId: globalProcessId, setProcessId: setGlobalProcessId } = useSelectedProcess();
 
-  const [processId, setProcessId] = useState(paramProcessId ?? "");
+  const [processId, setProcessId] = useState(paramProcessId || globalProcessId || "");
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
@@ -25,13 +28,13 @@ export function AssistantPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (paramProcessId) setProcessId(paramProcessId);
-  }, [paramProcessId]);
-
-  const processesQuery = useQuery({
-    queryKey: ["processes-select"],
-    queryFn: async () => (await api.get<ProcessSummary[]>("/processes")).data,
-  });
+    if (paramProcessId) {
+      setProcessId(paramProcessId);
+      setGlobalProcessId(paramProcessId);
+    } else if (globalProcessId) {
+      setProcessId(globalProcessId);
+    }
+  }, [paramProcessId, globalProcessId]);
 
   const processQuery = useQuery({
     queryKey: ["process", processId],
@@ -144,16 +147,7 @@ export function AssistantPage() {
         description={!processId ? "Selecione um processo para começar" : undefined}
         actions={
           <>
-            {!processId && (
-              <Select className="w-64" value={processId} onChange={(e) => navigate(`/assistant/${e.target.value}`)}>
-                <option value="">Selecione um processo...</option>
-                {processesQuery.data?.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
-            )}
+            <ProcessSelector onChange={(id) => navigate(id ? `/assistant/${id}` : "/assistant")} />
             {processId && (
               <>
                 <Button variant="secondary" onClick={handleGenerateBpmn}>

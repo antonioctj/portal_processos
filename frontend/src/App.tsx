@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./store/AuthContext";
+import { SelectedProcessProvider } from "./store/SelectedProcessContext";
 import { AppLayout } from "./layouts/AppLayout";
 import { LoginPage } from "./pages/auth/LoginPage";
 import { RegisterPage } from "./pages/auth/RegisterPage";
@@ -9,8 +10,7 @@ import { NewProcessPage } from "./pages/processes/NewProcessPage";
 import { ProcessDetailPage } from "./pages/processes/ProcessDetailPage";
 import { DocumentAnalyzePage } from "./pages/documents/DocumentAnalyzePage";
 import { DocumentLibraryPage } from "./pages/documents/DocumentLibraryPage";
-import { GapsPage } from "./pages/gaps/GapsPage";
-import { OpportunitiesPage } from "./pages/opportunities/OpportunitiesPage";
+import { GapsOpportunitiesPage } from "./pages/gaps/GapsOpportunitiesPage";
 import { AssistantPage } from "./pages/assistant/AssistantPage";
 import { AiProvidersPage } from "./pages/settings/AiProvidersPage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
@@ -41,7 +41,9 @@ export default function App() {
       <Route
         element={
           <RequireAuth>
-            <AppLayout />
+            <SelectedProcessProvider>
+              <AppLayout />
+            </SelectedProcessProvider>
           </RequireAuth>
         }
       >
@@ -51,8 +53,8 @@ export default function App() {
         <Route path="/processes/:id" element={<ProcessDetailPage />} />
         <Route path="/documents" element={<DocumentAnalyzePage />} />
         <Route path="/documents/library" element={<DocumentLibraryPage />} />
-        <Route path="/gaps" element={<GapsPage />} />
-        <Route path="/opportunities" element={<OpportunitiesPage />} />
+        <Route path="/gaps" element={<GapsOpportunitiesPage />} />
+        <Route path="/opportunities" element={<GapsOpportunitiesPage />} />
         <Route path="/assistant" element={<AssistantPage />} />
         <Route path="/assistant/:processId" element={<AssistantPage />} />
         <Route path="/reports" element={<ReportsPage />} />
