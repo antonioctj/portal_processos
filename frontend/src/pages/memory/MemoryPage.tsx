@@ -110,11 +110,11 @@ export function MemoryPage() {
                 />
               </div>
               <div className="sm:col-span-2">
-                <Label>Arquivo (opcional — .pdf, .docx, .doc ou .txt)</Label>
+                <Label>Arquivo (opcional — .pdf, .docx, .doc, .txt, .png, .jpg ou .webp)</Label>
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,.docx,.doc,.txt"
+                  accept=".pdf,.docx,.doc,.txt,.png,.jpg,.jpeg,.webp"
                   className="block w-full text-xs text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-xs file:font-medium file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-brand-900/30 dark:file:text-brand-300"
                 />
               </div>
@@ -138,14 +138,17 @@ export function MemoryPage() {
             {data?.map((t) => (
               <Card key={t.id} className="p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
+                  {t.url && t.mimeType?.startsWith("image/") && (
+                    <img src={t.url} alt={t.name} className="h-20 w-20 shrink-0 rounded-lg object-cover" />
+                  )}
+                  <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-slate-800 dark:text-slate-100">{t.name}</p>
                       <Badge color="blue">{TYPE_LABEL[t.type]}</Badge>
                     </div>
                     {t.description && <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{t.description}</p>}
                     {t.content && <p className="mt-1 whitespace-pre-wrap text-xs text-slate-500 dark:text-slate-400">{t.content}</p>}
-                    {t.url && (
+                    {t.url && !t.mimeType?.startsWith("image/") && (
                       <a href={t.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-brand-600 hover:underline">
                         Ver arquivo anexado
                       </a>

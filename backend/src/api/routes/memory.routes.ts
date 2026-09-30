@@ -21,6 +21,9 @@ const upload = multer({
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       "application/msword",
       "text/plain",
+      "image/png",
+      "image/jpeg",
+      "image/webp",
     ];
     if (allowed.includes(file.mimetype)) cb(null, true);
     else cb(new AppError(`Tipo de arquivo não suportado: ${file.mimetype}`, 415));
