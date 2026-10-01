@@ -23,5 +23,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   }
 
   logger.error({ err }, "Erro não tratado");
-  res.status(500).json({ error: "Erro interno do servidor" });
+  // Mensagem real exposta temporariamente para depuração (app interno da empresa) —
+  // sem stack trace. Reverter para mensagem genérica depois de resolvido.
+  res.status(500).json({ error: err instanceof Error ? `Erro interno: ${err.message}` : "Erro interno do servidor" });
 }
