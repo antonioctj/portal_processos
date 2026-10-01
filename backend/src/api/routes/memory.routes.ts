@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { z } from "zod";
 import { prisma } from "../../config/prisma";
-import { requireAuth, requireRole } from "../middleware/auth";
+import { requireAuth, requireAuthHeaderOrQuery, requireRole } from "../middleware/auth";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { storage } from "../../documents/storage";
 import { sha256 } from "../../utils/crypto";
@@ -10,7 +10,6 @@ import { recordAudit } from "../../audit/audit.service";
 import { NotFoundError, AppError } from "../../utils/errors";
 
 const router = Router();
-router.use(requireAuth, requireRole("ADMIN", "MANAGER"));
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -40,6 +39,8 @@ function serialize(template: Awaited<ReturnType<typeof prisma.memoryTemplate.fin
 
 router.get(
   "/",
+  requireAuth,
+  requireRole("ADMIN", "MANAGER"),
   asyncHandler(async (req, res) => {
     const templates = await prisma.memoryTemplate.findMany({
       where: { organizationId: req.auth!.organizationId },
@@ -58,6 +59,8 @@ const upsertSchema = z.object({
 
 router.post(
   "/",
+  requireAuth,
+  requireRole("ADMIN", "MANAGER"),
   upload.single("file"),
   asyncHandler(async (req, res) => {
     const input = upsertSchema.parse(req.body);
@@ -105,6 +108,8 @@ router.post(
 
 router.delete(
   "/:id",
+  requireAuth,
+  requireRole("ADMIN", "MANAGER"),
   asyncHandler(async (req, res) => {
     const existing = await prisma.memoryTemplate.findFirst({
       where: { id: req.params.id, organizationId: req.auth!.organizationId },
@@ -126,6 +131,8 @@ router.delete(
 
 router.get(
   "/file/:key",
+  requireAuthHeaderOrQuery,
+  requireRole("ADMIN", "MANAGER"),
   asyncHandler(async (req, res) => {
     const key = decodeURIComponent(req.params.key);
     if (!key.startsWith(req.auth!.organizationId)) {

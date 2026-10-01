@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, FileText, Network, Plus, Trash2, Upload, ImagePlus, GripVertical } from "lucide-react";
-import { api, apiErrorMessage } from "../../lib/api";
+import { api, apiErrorMessage, withToken } from "../../lib/api";
 import { PageHeader } from "../../layouts/AppLayout";
 import { Badge, Button, Card, ConfidenceBadge, EmptyState, Input, Label, Spinner, Textarea } from "../../components/ui";
 import { AnalysisProgress } from "../../components/AnalysisProgress";
@@ -559,7 +559,7 @@ function ScreensTab({ processId }: { processId: string }) {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {screensQuery.data.map((screen) => (
             <Card key={screen.id} className="overflow-hidden p-0">
-              <img src={screen.url} alt={screen.systemName} className="h-40 w-full object-cover" />
+              <img src={withToken(screen.url)} alt={screen.systemName} className="h-40 w-full object-cover" />
               <div className="p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>

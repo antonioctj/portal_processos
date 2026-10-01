@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { z } from "zod";
 import { prisma } from "../../config/prisma";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireAuthHeaderOrQuery } from "../middleware/auth";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { uploadAndParseDocument } from "../../documents/document.service";
 import { storage } from "../../documents/storage";
@@ -10,7 +10,6 @@ import { recordAudit } from "../../audit/audit.service";
 import { NotFoundError, AppError } from "../../utils/errors";
 
 const router = Router();
-router.use(requireAuth);
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -35,6 +34,7 @@ const upload = multer({
 
 router.get(
   "/",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const documents = await prisma.document.findMany({
       where: { organizationId: req.auth!.organizationId },
@@ -47,6 +47,7 @@ router.get(
 
 router.get(
   "/:id",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const document = await prisma.document.findFirst({
       where: { id: req.params.id, organizationId: req.auth!.organizationId },
@@ -59,6 +60,7 @@ router.get(
 
 router.post(
   "/",
+  requireAuth,
   upload.single("file"),
   asyncHandler(async (req, res) => {
     if (!req.file) throw new AppError("Nenhum arquivo enviado", 400);
@@ -91,6 +93,7 @@ const linkSchema = z.object({ processId: z.string().uuid() });
 
 router.post(
   "/:id/link",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const { processId } = linkSchema.parse(req.body);
     const document = await prisma.document.findFirst({
@@ -109,6 +112,7 @@ router.post(
 
 router.get(
   "/file/:key",
+  requireAuthHeaderOrQuery,
   asyncHandler(async (req, res) => {
     const key = decodeURIComponent(req.params.key);
     if (!key.startsWith(req.auth!.organizationId)) {

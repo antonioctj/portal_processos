@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
-import { api, apiErrorMessage } from "../../lib/api";
+import { api, apiErrorMessage, withToken } from "../../lib/api";
 import { PageHeader } from "../../layouts/AppLayout";
 import { Badge, Button, Card, Input, Label, Select, Textarea } from "../../components/ui";
 import type { MemoryTemplate, MemoryTemplateType } from "../../types/api";
@@ -139,7 +139,7 @@ export function MemoryPage() {
               <Card key={t.id} className="p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   {t.url && t.mimeType?.startsWith("image/") && (
-                    <img src={t.url} alt={t.name} className="h-20 w-20 shrink-0 rounded-lg object-cover" />
+                    <img src={withToken(t.url)} alt={t.name} className="h-20 w-20 shrink-0 rounded-lg object-cover" />
                   )}
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
@@ -149,7 +149,7 @@ export function MemoryPage() {
                     {t.description && <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{t.description}</p>}
                     {t.content && <p className="mt-1 whitespace-pre-wrap text-xs text-slate-500 dark:text-slate-400">{t.content}</p>}
                     {t.url && !t.mimeType?.startsWith("image/") && (
-                      <a href={t.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-brand-600 hover:underline">
+                      <a href={withToken(t.url)} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-brand-600 hover:underline">
                         Ver arquivo anexado
                       </a>
                     )}

@@ -35,6 +35,13 @@ api.interceptors.response.use(
   }
 );
 
+/** Anexa o token como querystring para URLs carregadas direto pelo navegador (<img>, <a>), que não passam pelo axios. */
+export function withToken(url: string): string {
+  const token = getToken();
+  if (!token) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
+}
+
 export function apiErrorMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
     return err.response?.data?.error || err.message;

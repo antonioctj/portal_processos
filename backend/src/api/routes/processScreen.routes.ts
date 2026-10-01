@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { prisma } from "../../config/prisma";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireAuthHeaderOrQuery } from "../middleware/auth";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { storage } from "../../documents/storage";
 import { sha256 } from "../../utils/crypto";
@@ -9,7 +9,6 @@ import { recordAudit } from "../../audit/audit.service";
 import { NotFoundError, AppError } from "../../utils/errors";
 
 const router = Router();
-router.use(requireAuth);
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -37,6 +36,7 @@ async function findProcessOrThrow(processId: string, organizationId: string) {
 
 router.get(
   "/processes/:processId/screens",
+  requireAuth,
   asyncHandler(async (req, res) => {
     await findProcessOrThrow(req.params.processId, req.auth!.organizationId);
     const screens = await prisma.processScreen.findMany({
@@ -49,6 +49,7 @@ router.get(
 
 router.post(
   "/processes/:processId/screens",
+  requireAuth,
   upload.single("file"),
   asyncHandler(async (req, res) => {
     const process = await findProcessOrThrow(req.params.processId, req.auth!.organizationId);
@@ -89,6 +90,7 @@ router.post(
 
 router.delete(
   "/screens/:id",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const existing = await prisma.processScreen.findFirst({
       where: { id: req.params.id, process: { organizationId: req.auth!.organizationId } },
@@ -111,6 +113,7 @@ router.delete(
 
 router.get(
   "/screens/file/:key",
+  requireAuthHeaderOrQuery,
   asyncHandler(async (req, res) => {
     const key = decodeURIComponent(req.params.key);
     if (!key.startsWith(req.auth!.organizationId)) {
