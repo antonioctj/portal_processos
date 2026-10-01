@@ -87,8 +87,14 @@ router.post(
       outputTokens: reply.usage.outputTokens,
     });
 
+    // A IA nem sempre devolve o JSON exatamente no schema pedido (ex: "actions" ausente
+    // ou null em vez de []) — tratamos esses casos como "nenhuma ação", em vez de deixar
+    // estourar um erro 500 não tratado.
+    const actions = Array.isArray(reply.data.actions) ? reply.data.actions : [];
+    const message = reply.data.message ?? "";
+
     let appliedBpmn = false;
-    if (reply.data.updatedBpmn && reply.data.actions.some((a) => a.type !== "NONE")) {
+    if (reply.data.updatedBpmn && actions.some((a) => a.type !== "NONE")) {
       await replaceVersionBpmn(version.id, reply.data.updatedBpmn, "CHAT");
       appliedBpmn = true;
     }
@@ -97,9 +103,9 @@ router.post(
       data: {
         conversationId: conversation.id,
         role: "ASSISTANT",
-        content: reply.data.question ? reply.data.question.text : reply.data.message,
+        content: reply.data.question ? reply.data.question.text : message,
         actions: {
-          actions: reply.data.actions,
+          actions,
           question: reply.data.question ?? null,
           appliedBpmn,
         } as never,
@@ -113,13 +119,13 @@ router.post(
       entity: "conversation",
       entityId: conversation.id,
       processId: process.id,
-      changes: { actions: reply.data.actions } as never,
+      changes: { actions } as never,
     });
 
     res.status(201).json({
       userMessage,
       assistantMessage,
-      actions: reply.data.actions,
+      actions,
       question: reply.data.question ?? null,
       appliedBpmn,
     });
