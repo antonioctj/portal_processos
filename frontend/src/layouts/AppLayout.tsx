@@ -24,7 +24,7 @@ import { useAuth } from "../store/AuthContext";
 const MENU = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/processes", label: "Processos", icon: Workflow },
-  { to: "/processes/new", label: "Novo Processo", icon: FilePlus2 },
+  { to: "/processes/new", label: "Criar Projeto", icon: FilePlus2 },
   { to: "/documents", label: "Analisar Documento", icon: FileSearch },
   { to: "/assistant", label: "Modelador BPMN / Assistente IA", icon: Network },
   { to: "/gaps", label: "Gaps & Oportunidades", icon: AlertTriangle },

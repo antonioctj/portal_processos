@@ -91,7 +91,7 @@ export function DashboardPage() {
                   <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                     {data.latestProcesses.map((p) => (
                       <li key={p.id} className="flex items-center justify-between py-2.5">
-                        <Link to={`/processes/${p.id}`} className="text-sm font-medium text-slate-800 hover:text-brand-600 dark:text-slate-200">
+                        <Link to={`/processes/${p.id}/workspace`} className="text-sm font-medium text-slate-800 hover:text-brand-600 dark:text-slate-200">
                           {p.name}
                         </Link>
                         <div className="flex items-center gap-2">
@@ -113,7 +113,7 @@ export function DashboardPage() {
                     {data.latestVersions.map((v) => (
                       <li key={v.id} className="py-2.5">
                         <div className="flex items-center justify-between">
-                          <Link to={`/processes/${v.process.id}`} className="text-sm font-medium text-slate-800 hover:text-brand-600 dark:text-slate-200">
+                          <Link to={`/processes/${v.process.id}/workspace`} className="text-sm font-medium text-slate-800 hover:text-brand-600 dark:text-slate-200">
                             {v.process.name}
                           </Link>
                           <Badge color="purple">v{v.version}</Badge>

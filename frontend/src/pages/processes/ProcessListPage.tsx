@@ -72,7 +72,7 @@ export function ProcessListPage() {
                 {data.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                     <td className="px-4 py-3">
-                      <Link to={`/processes/${p.id}`} className="font-medium text-slate-800 hover:text-brand-600 dark:text-slate-100">
+                      <Link to={`/processes/${p.id}/workspace`} className="font-medium text-slate-800 hover:text-brand-600 dark:text-slate-100">
                         {p.name}
                       </Link>
                     </td>

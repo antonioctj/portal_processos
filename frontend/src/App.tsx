@@ -8,6 +8,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { ProcessListPage } from "./pages/processes/ProcessListPage";
 import { NewProcessPage } from "./pages/processes/NewProcessPage";
 import { ProcessDetailPage } from "./pages/processes/ProcessDetailPage";
+import { ProcessWorkspacePage } from "./pages/processes/ProcessWorkspacePage";
 import { DocumentAnalyzePage } from "./pages/documents/DocumentAnalyzePage";
 import { DocumentLibraryPage } from "./pages/documents/DocumentLibraryPage";
 import { GapsOpportunitiesPage } from "./pages/gaps/GapsOpportunitiesPage";
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="/processes" element={<ProcessListPage />} />
         <Route path="/processes/new" element={<NewProcessPage />} />
         <Route path="/processes/:id" element={<ProcessDetailPage />} />
+        <Route path="/processes/:id/workspace" element={<ProcessWorkspacePage />} />
         <Route path="/documents" element={<DocumentAnalyzePage />} />
         <Route path="/documents/library" element={<DocumentLibraryPage />} />
         <Route path="/gaps" element={<GapsOpportunitiesPage />} />

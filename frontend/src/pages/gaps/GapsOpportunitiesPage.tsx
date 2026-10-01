@@ -174,7 +174,7 @@ export function GapsOpportunitiesPage() {
                         </div>
                         <p className="font-medium text-slate-800 dark:text-slate-100">{gap.description}</p>
                         {gap.process && (
-                          <Link to={`/processes/${gap.process.id}`} className="text-xs text-brand-600 hover:underline">
+                          <Link to={`/processes/${gap.process.id}/workspace`} className="text-xs text-brand-600 hover:underline">
                             {gap.process.name}
                           </Link>
                         )}
@@ -233,7 +233,7 @@ export function GapsOpportunitiesPage() {
                         </div>
                         <p className="font-medium text-slate-800 dark:text-slate-100">{opp.title}</p>
                         {opp.process && (
-                          <Link to={`/processes/${opp.process.id}`} className="text-xs text-brand-600 hover:underline">
+                          <Link to={`/processes/${opp.process.id}/workspace`} className="text-xs text-brand-600 hover:underline">
                             {opp.process.name}
                           </Link>
                         )}

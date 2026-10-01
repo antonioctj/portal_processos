@@ -14,6 +14,10 @@ const emptyForm = {
   objective: "",
   scope: "",
   category: "",
+  projectName: "",
+  documentResponsible: "",
+  elaborationDate: "",
+  validatorName: "",
 };
 
 export function NewProcessPage() {
@@ -35,7 +39,7 @@ export function NewProcessPage() {
     setLoading(true);
     try {
       const { data } = await api.post("/processes", form);
-      navigate(`/processes/${data.id}`);
+      navigate(`/processes/${data.id}/workspace`);
     } catch (err) {
       setError(apiErrorMessage(err));
     } finally {
@@ -49,7 +53,7 @@ export function NewProcessPage() {
     setAiLoading(true);
     try {
       const { data } = await api.post("/processes/generate", { description: aiDescription });
-      navigate(`/processes/${data.process.id}`);
+      navigate(`/processes/${data.process.id}/workspace`);
     } catch (err) {
       setError(apiErrorMessage(err));
     } finally {
@@ -59,13 +63,17 @@ export function NewProcessPage() {
 
   return (
     <div>
-      <PageHeader title="Novo Processo" description="Cadastre manualmente ou peça para a IA criar o processo por você" />
+      <PageHeader title="Criar Projeto" description="Cadastre os dados do projeto manualmente ou peça para a IA começar por você — depois você segue para o Levantamento" />
       <div className="grid grid-cols-1 gap-6 p-6 lg:grid-cols-3">
         <Card className="p-5 lg:col-span-2">
           <h2 className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">Cadastro manual</h2>
           <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <Label>Nome do processo *</Label>
+              <Label>Nome do projeto</Label>
+              <Input value={form.projectName} onChange={(e) => set("projectName", e.target.value)} placeholder="Ex: Mapeamento AS-IS — Estorno de anuidades" />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Processo *</Label>
               <Input required value={form.name} onChange={(e) => set("name", e.target.value)} />
             </div>
             <div>
@@ -81,12 +89,24 @@ export function NewProcessPage() {
               <Textarea rows={2} value={form.description} onChange={(e) => set("description", e.target.value)} />
             </div>
             <div>
-              <Label>Área responsável</Label>
+              <Label>Área / Operação</Label>
               <Input value={form.area} onChange={(e) => set("area", e.target.value)} />
             </div>
             <div>
               <Label>Departamento</Label>
               <Input value={form.department} onChange={(e) => set("department", e.target.value)} />
+            </div>
+            <div>
+              <Label>Responsável pelo documento</Label>
+              <Input value={form.documentResponsible} onChange={(e) => set("documentResponsible", e.target.value)} />
+            </div>
+            <div>
+              <Label>Data de elaboração</Label>
+              <Input type="date" value={form.elaborationDate} onChange={(e) => set("elaborationDate", e.target.value)} />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Quem valida</Label>
+              <Input value={form.validatorName} onChange={(e) => set("validatorName", e.target.value)} />
             </div>
             <div className="sm:col-span-2">
               <Label>Objetivo</Label>
@@ -101,7 +121,7 @@ export function NewProcessPage() {
 
             <div className="sm:col-span-2">
               <Button type="submit" disabled={loading}>
-                {loading ? "Criando..." : "Criar processo"}
+                {loading ? "Criando..." : "Criar projeto"}
               </Button>
             </div>
           </form>

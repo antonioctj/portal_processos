@@ -101,27 +101,31 @@ enum ProcessStatus {
 }
 
 model Process {
-  id             String        @id @default(uuid())
-  organizationId String
-  projectId      String?
-  parentId       String?
-  code           String?
-  name           String
-  description    String?
-  area           String?
-  ownerId        String?
-  department     String?
-  objective      String?
-  scope          String?
-  category       String?
-  status         ProcessStatus @default(DRAFT)
-  currentVersion String        @default("0.1")
-  healthScore    Int?
-  macroFlow      Json? // fases de alto nivel: [{ title, description }]
-  architecture   Json? // sistemas envolvidos: [{ system, type, description, integratesWith }]
-  createdById    String
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id                  String        @id @default(uuid())
+  organizationId      String
+  projectId           String?
+  parentId            String?
+  code                String?
+  name                String
+  description         String?
+  area                String?
+  ownerId             String?
+  department          String?
+  objective           String?
+  scope               String?
+  category            String?
+  status              ProcessStatus @default(DRAFT)
+  currentVersion      String        @default("0.1")
+  healthScore         Int?
+  macroFlow           Json? // fases de alto nivel: [{ title, description }]
+  architecture        Json? // sistemas envolvidos: [{ system, type, description, integratesWith }]
+  projectName         String? // Nome do Projeto (capa)
+  documentResponsible String? // Responsavel pelo Documento
+  elaborationDate     DateTime? // Data de Elaboracao
+  validatorName       String? // Quem Valida
+  createdById         String
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project      Project?     @relation(fields: [projectId], references: [id])
@@ -139,6 +143,7 @@ model Process {
   actions         Action[]
   rules           ProcessRule[]
   screens         ProcessScreen[]
+  survey          ProcessSurvey?
 
   @@index([organizationId])
   @@index([projectId])
@@ -469,6 +474,49 @@ model MemoryTemplate {
 
   @@index([organizationId])
   @@map("memory_templates")
+}
+
+model ProcessSurvey {
+  id        String @id @default(uuid())
+  processId String @unique
+
+  context String? @db.Text // Contexto do Processo
+
+  scopeStart String?
+  scopeEnd   String?
+  scopeIn    String? @db.Text
+  scopeOut   String? @db.Text
+
+  volumetria        String?
+  tma               String?
+  sla               String?
+  frequencia        String?
+  diasExecucao      String?
+  horarioOperacao   String?
+  capacidade        String?
+  formaFaturamento  String?
+  outrosIndicadores String? @db.Text
+
+  actors  Json? // [{ area, responsible? }]
+  systems Json? // [{ system, usage? }]
+  inputs  Json? // [{ input, origin? }]
+
+  flowEvidence         String? @db.Text // Fluxo e Evidencias do Processo AS IS
+  stepsDetail          String? @db.Text // Detalhamento das Etapas
+  executionContingency String? @db.Text // Execucao e Contingencias Atuais
+  filesAndData         String? @db.Text // Arquivo e Dados
+  accessProfiles       String? @db.Text // Acesso e Perfis Atuais
+  additionalInfo       String? @db.Text // Informacoes Complementares, Orientacoes e Exemplos
+
+  pendingInfo           Json? // [{ description, responsible?, deadline?, status? }]
+  completenessChecklist Json? // { [itemKey]: boolean }
+  validationChecklist   Json? // { [itemKey]: boolean }
+
+  updatedAt DateTime @updatedAt
+
+  process Process @relation(fields: [processId], references: [id], onDelete: Cascade)
+
+  @@map("process_surveys")
 }
 
 // ─────────────────────────────────────────────────────────────────────────

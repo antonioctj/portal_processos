@@ -55,6 +55,64 @@ export interface ProcessDetail extends ProcessSummary {
   documents: { document: DocumentItem }[];
   macroFlow: MacroFlowPhase[] | null;
   architecture: ArchitectureSystem[] | null;
+  projectName: string | null;
+  documentResponsible: string | null;
+  elaborationDate: string | null;
+  validatorName: string | null;
+}
+
+export interface SurveyActor {
+  area: string;
+  responsible?: string;
+}
+
+export interface SurveySystem {
+  system: string;
+  usage?: string;
+}
+
+export interface SurveyInput {
+  input: string;
+  origin?: string;
+}
+
+export interface SurveyPendingInfo {
+  description: string;
+  responsible?: string;
+  deadline?: string;
+  status?: string;
+}
+
+export interface ProcessSurvey {
+  id: string;
+  processId: string;
+  context: string | null;
+  scopeStart: string | null;
+  scopeEnd: string | null;
+  scopeIn: string | null;
+  scopeOut: string | null;
+  volumetria: string | null;
+  tma: string | null;
+  sla: string | null;
+  frequencia: string | null;
+  diasExecucao: string | null;
+  horarioOperacao: string | null;
+  capacidade: string | null;
+  formaFaturamento: string | null;
+  outrosIndicadores: string | null;
+  actors: SurveyActor[] | null;
+  systems: SurveySystem[] | null;
+  inputs: SurveyInput[] | null;
+  flowEvidence: string | null;
+  stepsDetail: string | null;
+  executionContingency: string | null;
+  filesAndData: string | null;
+  accessProfiles: string | null;
+  additionalInfo: string | null;
+  pendingInfo: SurveyPendingInfo[] | null;
+  completenessChecklist: Record<string, boolean> | null;
+  validationChecklist: Record<string, boolean> | null;
+  updatedAt: string;
 }
 
 export interface ProcessRule {

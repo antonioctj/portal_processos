@@ -33,6 +33,10 @@ const createProcessSchema = z.object({
   parentId: z.string().uuid().optional(),
   projectId: z.string().uuid().optional(),
   category: z.string().optional(),
+  projectName: z.string().optional(),
+  documentResponsible: z.string().optional(),
+  elaborationDate: z.coerce.date().optional(),
+  validatorName: z.string().optional(),
 });
 
 router.get(
@@ -653,6 +657,98 @@ router.patch(
     });
 
     res.json({ architecture: process.architecture });
+  })
+);
+
+// ── Levantamento estruturado (ProcessSurvey) ──
+router.get(
+  "/:id/survey",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const process = await prisma.process.findFirst({
+      where: { id: req.params.id, organizationId: req.auth!.organizationId },
+    });
+    if (!process) throw new NotFoundError("Processo não encontrado");
+
+    const survey = await prisma.processSurvey.findUnique({ where: { processId: process.id } });
+    res.json(survey);
+  })
+);
+
+const surveySchema = z.object({
+  context: z.string().optional().nullable(),
+  scopeStart: z.string().optional().nullable(),
+  scopeEnd: z.string().optional().nullable(),
+  scopeIn: z.string().optional().nullable(),
+  scopeOut: z.string().optional().nullable(),
+  volumetria: z.string().optional().nullable(),
+  tma: z.string().optional().nullable(),
+  sla: z.string().optional().nullable(),
+  frequencia: z.string().optional().nullable(),
+  diasExecucao: z.string().optional().nullable(),
+  horarioOperacao: z.string().optional().nullable(),
+  capacidade: z.string().optional().nullable(),
+  formaFaturamento: z.string().optional().nullable(),
+  outrosIndicadores: z.string().optional().nullable(),
+  actors: z.array(z.object({ area: z.string(), responsible: z.string().optional() })).optional(),
+  systems: z.array(z.object({ system: z.string(), usage: z.string().optional() })).optional(),
+  inputs: z.array(z.object({ input: z.string(), origin: z.string().optional() })).optional(),
+  flowEvidence: z.string().optional().nullable(),
+  stepsDetail: z.string().optional().nullable(),
+  executionContingency: z.string().optional().nullable(),
+  filesAndData: z.string().optional().nullable(),
+  accessProfiles: z.string().optional().nullable(),
+  additionalInfo: z.string().optional().nullable(),
+  pendingInfo: z
+    .array(
+      z.object({
+        description: z.string(),
+        responsible: z.string().optional(),
+        deadline: z.string().optional(),
+        status: z.string().optional(),
+      })
+    )
+    .optional(),
+  completenessChecklist: z.record(z.boolean()).optional(),
+  validationChecklist: z.record(z.boolean()).optional(),
+});
+
+router.put(
+  "/:id/survey",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const input = surveySchema.parse(req.body);
+    const process = await prisma.process.findFirst({
+      where: { id: req.params.id, organizationId: req.auth!.organizationId },
+    });
+    if (!process) throw new NotFoundError("Processo não encontrado");
+
+    const data = {
+      ...input,
+      actors: input.actors as never,
+      systems: input.systems as never,
+      inputs: input.inputs as never,
+      pendingInfo: input.pendingInfo as never,
+      completenessChecklist: input.completenessChecklist as never,
+      validationChecklist: input.validationChecklist as never,
+    };
+
+    const survey = await prisma.processSurvey.upsert({
+      where: { processId: process.id },
+      create: { processId: process.id, ...data },
+      update: data,
+    });
+
+    await recordAudit({
+      organizationId: req.auth!.organizationId,
+      userId: req.auth!.userId,
+      action: "UPDATE",
+      entity: "process_survey",
+      entityId: survey.id,
+      processId: process.id,
+    });
+
+    res.json(survey);
   })
 );
 
